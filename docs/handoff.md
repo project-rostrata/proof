@@ -34,4 +34,4 @@ All of these are recorded in `PROJECT_BRIEF.md` §4 and `decisions.md`.
 
 ## Next step
 
-Commit the spike and the doc updates so `spike/` survives in git history, then remove `spike/` in a follow-up commit and start Phase 2 (scaffolding). The human has to OK both commits.
+Phase 2 (scaffolding, `V1_PLAN.md`). The spike was committed in `b71f680` and removed in the next commit. Use `git show b71f680 -- spike/` to see it, including the pinned upstream mini-gl files that Phase 2 copies the kept pieces from.

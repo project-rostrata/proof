@@ -21,7 +21,7 @@ The spike passed on Firefox for Linux desktop, Firefox for Android, and headless
 - **Filters ported from darktable.**
 - **Editing on a preview-sized source**, with the original rendered at full resolution only on save.
 
-Safari and iPad are out of scope for v1. The original measurement brief is kept below for the record. `spike/` is removed once it's committed to history.
+Safari and iPad are out of scope for v1. The original measurement brief is kept below for the record. `spike/` was removed after being committed to history; see commit `844e341`.
 
 - **Load:** decode a real 24 MP JPEG (about 6000×4000) into a texture. Check `gl.MAX_TEXTURE_SIZE`, and check that GPU memory copes.
 - **Interactive frame rate:** with 5+ stacked passes (tune, curves via a 1D LUT texture, white balance, structure as an unsharp mask on a downsampled blur, vignette), dragging a slider should re-render the screen-sized preview at display frame rate. Write down the actual numbers.
