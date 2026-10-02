@@ -62,16 +62,31 @@ This is the human's standing direction from `larder`: filtering, formatting, and
 
 ## Frontend pipeline conventions (`frontend/src/pipeline/`)
 
-- **Raw WebGL2 and hand-written GLSL. No graphics or image library.** Each tool is a small file in `src/pipeline/ops/` that exports:
+- **WebGL2 and GLSL: a narrow mini-gl fork for the plumbing, darktable for the filters, and no other graphics or image library** (brief §2).
+- **Provenance headers are mandatory.** Every file derived from someone else's code starts with a header naming:
+  - the upstream project, file, and pinned commit;
+  - its copyright holders and licence;
+  - what proof changed.
+
+  Files from mini-gl keep the MIT notices of both xdadda (2025) and Evan Wallace (glfx.js, 2011). Files ported from darktable carry "Copyright (C) <years> darktable developers", GPL-3.0-or-later. Every third-party source is listed in `src/pipeline/LICENSES.md`.
+- **Only copy from licence-clean sources:** MIT/BSD/Apache, or GPL-3.0-compatible (darktable). Never copy from Shadertoy (CC BY-NC-SA by default), Stack Overflow answers from before May 2018 (CC BY-SA 3.0), or any proprietary editor, even when another project cites it. When the provenance of a snippet is unclear, write it from the algorithm's description instead.
+- **Porting from darktable.** darktable's OpenCL kernels (`data/kernels/*.cl`) translate most directly into GLSL fragment shaders. Work by kernel type:
+  - Per-pixel kernels map one-to-one.
+  - Pyramids and blurs become several passes.
+  - darktable's pipeline is scene-referred linear with a Rec.2020 working space, while proof's is linear sRGB/Rec.709 from JPEG input. Any colour-space matrix or primaries-dependent constant has to be converted, not copied.
+  - Snapseed sets the UX (which sliders exist, and their −100…+100 ranges). darktable sets the math.
+
+Each tool is a small file in `src/pipeline/ops/` that exports:
   - a stable tool `id` (it's written into recipes, so never rename it);
   - its parameter schema, with a default (identity) value for each parameter;
   - its GLSL fragment source (or, for geometry tools, its UV transform);
   - a function that binds the tool's uniforms from a params object.
-- **An op is a pure function of (input texture, params) → output texture.** No hidden state, no reading the DOM, no reaching into other ops. The stack runner owns the GL context and framebuffers and alternates passes between the two framebuffers. Ops never allocate framebuffers themselves.
+- **An op is a pure function of (input texture, params) → output texture.** No hidden state, no reading the DOM, no reaching into other ops. The stack runner owns the GL context and framebuffers and alternates passes between the two framebuffers. Ops never allocate GL resources themselves. A multi-pass op, such as local contrast or shadows/highlights with a blurred mask, declares its internal passes and asks the runner for scratch textures, including reduced-resolution ones.
+- **Spatial parameters are resolution-independent.** Blur radii and similar values are expressed relative to the image's long edge, so editing on the preview-sized source gives the same look as the full-resolution render on save.
 - **Default parameters must be an exact identity.** A tool added at its defaults must not change any pixel beyond float rounding. `frontend/test/pipeline.html` asserts this for every op.
 - **The preview path and the export path run the same ops.** The only difference is the render target size. Never add a "preview-only approximation" of a tool, because what you see must be what gets saved.
-- **The recipe schema is versioned, and only the frontend reads it.** A recipe is `{"version": N, "stack": [{"tool": "<id>", "params": {...}}, ...]}`. When a change would alter an existing recipe's meaning (a parameter rename, or a change of scale), bump `version` and add a migration in `src/pipeline/recipe.js` that upgrades older recipes on load. A saved recipe must always reopen to the same pixels.
-- **Colour:** inputs are sRGB. Decide per op whether it works in sRGB or linear light, and say so in a comment at the top of the op. Intermediates use half-float when `EXT_color_buffer_float` is available. The fallback when it isn't is decided by the Phase 1 spike (see `docs/decisions.md`).
+- **The recipe schema is versioned, and only the frontend reads it.** A recipe is `{"version": N, "stack": [{"tool": "<id>", "params": {...}}, ...]}`. When a change would alter an existing recipe's meaning (a parameter rename, or a change of scale), bump `version` and add a migration in `src/pipeline/recipe.js` that upgrades older recipes on load. A saved recipe must always reopen to the same look. GPUs aren't bit-identical, so the guarantee is "within the tested tolerance". The Phase 1 spike measured a 1-level difference between a desktop and a phone. The stored render stays the truth.
+- **Colour:** inputs are sRGB. Decide per op whether it works in sRGB or linear light, and say so in a comment at the top of the op. Intermediates are half-float (RGBA16F), and `EXT_color_buffer_float` is required. Every v1 target browser had it in the Phase 1 spike. Without it, the editor shows an "unsupported browser" message rather than falling back to 8-bit. Float storage doesn't clamp, so every op must be NaN- and range-safe: guard any division by luminance, and clamp wherever a later op assumes 0…1.
 
 ## Images on the server
 

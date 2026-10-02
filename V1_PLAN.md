@@ -13,9 +13,15 @@ This plan breaks v1 into ordered phases. Each phase should leave the app in a bu
 
 Dependency policy (brief §2): the Postgres JDBC driver, any `kotlinx.*` library, and `kotlin-test` are pre-approved. Anything else, on either side of the wire, needs to be raised with the human before it's added.
 
-## Phase 1 — WebGL2 pipeline spike (throwaway, before the repo has code)
+## Phase 1 — WebGL2 pipeline spike with mini-gl (throwaway, before the repo has code) — DONE
 
-This is the highest-risk phase in the project, so it's done first, the same way `press` validated its printer driver against real hardware before writing application code. Build a single throwaway `spike.html` with no VanJS and no backend: open a local file, render it through a stack of passes, and export it. Then measure on the target devices from brief §5:
+The spike passed on Firefox for Linux desktop, Firefox for Android, and headless Chrome. The outcome, with every number, is in `docs/decisions.md`:
+- **A narrow fork of mini-gl:** GL core, runner, spline, perspective, and matrix transform only.
+- **Half-float intermediates.**
+- **Filters ported from darktable.**
+- **Editing on a preview-sized source**, with the original rendered at full resolution only on save.
+
+Safari and iPad are out of scope for v1. The original measurement brief is kept below for the record. `spike/` is removed once it's committed to history.
 
 - **Load:** decode a real 24 MP JPEG (about 6000×4000) into a texture. Check `gl.MAX_TEXTURE_SIZE`, and check that GPU memory copes.
 - **Interactive frame rate:** with 5+ stacked passes (tune, curves via a 1D LUT texture, white balance, structure as an unsharp mask on a downsampled blur, vignette), dragging a slider should re-render the screen-sized preview at display frame rate. Write down the actual numbers.
@@ -40,7 +46,8 @@ proof/
   frontend/
     index.html  app.js  lib/van-1.6.1.js
     src/views/  src/components/
-    src/pipeline/      WebGL2 context, stack runner, ops/ (one file per tool)
+    src/pipeline/      WebGL2 core + runner (narrow mini-gl fork, MIT notices), recipe.js, ops/ (one file
+                       per tool, ported from darktable), LICENSES.md (third-party notices)
     test/pipeline.html zero-dependency golden-pixel tests
   docker/
     Dockerfile  entrypoint.sh  docker-compose.yml

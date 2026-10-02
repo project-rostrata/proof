@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>proof — WebGL spike</title>
+  <style>
+    :root { color-scheme: dark; --bg: #16181b; --fg: #e6e6e6; --muted: #9aa0a6; --line: #2c3036; --accent: #7fb3ff; }
+    body { margin: 0; padding: 16px; background: var(--bg); color: var(--fg); font: 14px/1.45 system-ui, sans-serif; }
+    h1 { font-size: 18px; margin: 0 0 4px; }
+    h2 { font-size: 15px; margin: 24px 0 8px; border-top: 1px solid var(--line); padding-top: 16px; }
+    p { color: var(--muted); margin: 0 0 12px; max-width: 70ch; }
+    .bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    button, select, input[type=file] { font: inherit; color: var(--fg); background: #23272d; border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; }
+    button:disabled { opacity: .45; }
+    #status { color: var(--accent); margin: 10px 0; }
+    #sliders { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 6px 16px; margin: 8px 0; }
+    #sliders label { display: flex; flex-direction: column; color: var(--muted); font-size: 12px; }
+    #frame { font-variant-numeric: tabular-nums; color: var(--accent); }
+    #stage canvas { width: 100%; height: auto; display: block; background: #000; margin-top: 8px; }
+    #banding { display: flex; flex-wrap: wrap; gap: 12px; }
+    #banding figure { margin: 0; }
+    #banding figcaption { color: var(--muted); font-size: 12px; }
+    .strip { display: block; width: 256px; height: 28px; image-rendering: pixelated; margin-top: 2px; }
+    pre { background: #0f1113; border: 1px solid var(--line); padding: 12px; overflow: auto; font-size: 12px; max-height: 60vh; }
+  </style>
+</head>
+<body>
+  <h1>proof — Phase 1 WebGL spike (mini-gl)</h1>
+  <p>Throwaway. Load a real photo from your camera or phone (or generate a synthetic 24 MP one), drag the
+    sliders to judge how it feels, then click <b>Run all tests</b> and copy the JSON back.</p>
+  <div class="bar">
+    <input id="file" type="file" accept="image/jpeg,image/png">
+    <button id="synthetic">Use synthetic 24 MP</button>
+    <button id="run" disabled>Run all tests</button>
+    <button id="copy">Copy results JSON</button>
+    <button id="saveResults">Save results JSON</button>
+    <button id="download" disabled>Download last export</button>
+  </div>
+  <div id="status">Load a photo to start.</div>
+
+  <h2>Interactive</h2>
+  <div class="bar">
+    <select id="variant">
+      <option value="u8">mini-gl upstream (8-bit intermediates)</option>
+      <option value="f16">spike fork (half-float intermediates)</option>
+    </select>
+    <select id="res">
+      <option value="preview">preview (1600 px long edge)</option>
+      <option value="full">full resolution</option>
+    </select>
+    <span id="frame"></span>
+  </div>
+  <div id="sliders"></div>
+  <div id="stage"></div>
+
+  <h2>Banding (gray ramp through each stack; second strip = first 64 levels, ×4 brightness)</h2>
+  <div id="banding"></div>
+
+  <h2>Results</h2>
+  <pre id="results">{}</pre>
+
+  <script type="module" src="spike.js"></script>
+</body>
+</html>

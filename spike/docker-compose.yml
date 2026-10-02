@@ -1,0 +1,12 @@
+# Serves the throwaway Phase 1 spike as static files -- see README.md. No build, no app code:
+# the spike directory is bind-mounted read-only into a stock nginx image.
+#   docker compose -f spike/docker-compose.yml up
+# then open http://localhost:8008 (or http://<this-machine's-ip>:8008 from other LAN devices).
+services:
+  spike:
+    # nginx stable branch (even minor), pinned to an exact patch like every other image in this workspace.
+    image: nginx:1.30.5-alpine
+    ports:
+      - "8008:80"
+    volumes:
+      - ./:/usr/share/nginx/html:ro

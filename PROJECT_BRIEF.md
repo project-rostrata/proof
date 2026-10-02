@@ -23,7 +23,12 @@ This is the fourth sibling project in this workspace, after `shelf` (a self-host
 - **No Gradle or Maven.** Compile directly with `kotlinc`, using hand-written `build.sh`/`run.sh`/`test.sh`. No hidden build-tool magic.
 - **Dependency jars are fetched, never committed.** Use a git-tracked `backend/lib/DEPENDENCIES.sha1` manifest plus `backend/lib/fetch-deps.sh`, the same as `shelf`.
 - **Frontend: VanJS and plain ES modules.** No bundler, no npm dependency tree, no build step.
-- **The edit pipeline is hand-written WebGL2 and GLSL in the browser.** No graphics or image-processing library: not glfx.js, PixiJS, three.js, or a WASM image library. Each edit tool is a small, readable shader. See section 4.
+- **The edit pipeline is WebGL2 and GLSL in the browser: a narrow fork of [mini-gl](https://github.com/xdadda/mini-gl), with filters ported from [darktable](https://github.com/darktable-org/darktable).**
+  - **From mini-gl:** only its GL core, ping-pong runner, cubic spline, perspective warp, and matrix transform are copied into `frontend/src/pipeline/`. mini-gl is MIT, and the copy is taken from pinned commit `28238857` with both MIT notices kept.
+  - **The filters:** each one is written for proof, borrowing algorithms and code from darktable's modules and OpenCL kernels. darktable is GPL-3.0-or-later, the same licence as proof.
+  - **Never carry over:** mini-gl's own adjustment, highlights/shadows, blur, denoise, and bloom shaders. Their cited origins aren't GPL-compatible (`docs/decisions.md`).
+  - **No other graphics or image-processing library:** not PixiJS, three.js, Fabric, or a WASM image library.
+- **Licence lock-in.** Because the pipeline ports darktable code, proof must stay GPL-3.0-or-later. It can't later be relicensed to MIT, Apache, or similar without first removing that code.
 - **No image library on the server.** Decoding, thumbnailing, and encoding use the JDK's `javax.imageio` and `java.awt` (`Graphics2D`). The EXIF and XMP handling is hand-written: a small TIFF/EXIF reader, and `javax.xml` for XMP.
 - **v1 input formats: JPEG and PNG only.** Both are what ImageIO decodes natively. HEIC and camera RAW are deferred (section 6).
 - **Storage: the filesystem is the source of truth, and Postgres is an index over it**, the same model as `shelf`. Originals, renders, recipes, and rating sidecars are real files in normal, readable formats. Postgres caches their state for fast querying and can be rebuilt from disk.
@@ -110,7 +115,7 @@ HEIC (iPhone) and camera RAW are deferred to v1.5. Both need a decoder the JDK d
 - **Store the recipe as well as the render?** Decided: yes, store both (section 4).
 - **v1 input formats.** Decided: JPEG and PNG only.
 - **Auth.** Open. The recommendation is `shelf`-style accounts (username/password, PBKDF2, cookie sessions, a per-user data directory), because personal photos are private data in a way that `press`'s print jobs aren't. The alternative is `press`'s no-auth, trusted-LAN model.
-- **Target browsers and devices.** Open. Desktop browsers only, or tablets (iPad Safari) too? This decides which devices the Phase 1 WebGL spike has to pass on (`MAX_TEXTURE_SIZE`, half-float support, memory for a 24 MP texture), and whether the edit UI needs touch-first controls like Snapseed's swipe-to-adjust.
+- **Target browsers and devices.** Decided: current **Firefox and Chromium-based browsers on desktop and Android**. Safari, iOS, and iPadOS are out of scope for v1. The Phase 1 spike passed on Firefox for Linux desktop, Firefox for Android (Pixel 7a), and headless Chrome. Phones are supported but aren't the primary target, so the edit UI is designed for desktop first. Snapseed-style touch-first controls such as swipe-to-adjust aren't a v1 requirement.
 - **XMP sidecar naming.** Open. `IMG_0001.jpg.xmp` (darktable-style) or `IMG_0001.xmp` (Lightroom-style; the two collide if `IMG_0001.jpg` and `IMG_0001.png` are both in a project). The proposal is darktable-style.
 - **Max upload size per file.** Open. The proposed default is 100 MB, set by an env var.
 - **Export options.** Open. The proposal is: download the picks (rendered if edited, original otherwise) as a ZIP. JPEG quality is fixed at the browser's encode setting (about 0.92). No resize-on-export in v1.

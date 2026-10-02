@@ -44,3 +44,117 @@ Photos are 5–20 MB each, so a client-side queue of about 3 concurrent single-f
 ## 2026-10-02 — WebGL2 spike comes first
 
 The browser pipeline is the one genuinely novel risk in the project, in the same way the printer driver was for `press`. `V1_PLAN.md` Phase 1 is a throwaway spike that measures, on the real target devices: 24 MP texture load, interactive frame rate with a stacked pipeline, half-float support and banding, full-resolution export time, colour fidelity, and the EXIF splice. Its findings, with numbers, get recorded here before any repo code is written.
+
+## 2026-10-02 — The edit pipeline builds on mini-gl (approved dependency)
+
+The human asked to look for an existing library rather than reinvent the basic photo-editing shaders. The options surveyed:
+- **glfx.js:** MIT, but WebGL1, last pushed in 2023, and lacking shadows/highlights and white balance.
+- **WebGLImageFilter:** mostly colour-matrix effects.
+- **LYGIA:** a GLSL function library under a non-standard licence (GitHub can't identify it as an OSI licence), which is unsafe to assume is GPL-compatible.
+- **WASM CPU engines** (wasm-vips, Photon, OpenCV.js): megabytes in size and too slow for live sliders at 24 MP.
+- **Full editor libraries** (Fabric.js, Filerobot, TUI Image Editor): large, bundle their own UI, and the wrong shape.
+
+**mini-gl** ([xdadda/mini-gl](https://github.com/xdadda/mini-gl), MIT, two ES modules of about 30 KB, no dependencies, WebGL2, built on glfx.js) covers most of the v1 tool list: brightness, exposure, contrast, shadows/highlights, temperature/tint, vibrance, saturation, curves, clarity, vignette, perspective, crop, and rotate. It's a single-maintainer project (37 stars, last pushed December 2025), so the plan is to vendor a pinned copy, the way VanJS is vendored, and be ready to own it.
+
+Approved on these terms: the Phase 1 spike decides between vendoring mini-gl as-is and forking it into `src/pipeline/`. No other graphics or image library is approved. Recorded in `PROJECT_BRIEF.md` §2.
+
+## 2026-10-02 — Phase 1 spike: headless correctness findings (real-device numbers still pending)
+
+Built in `spike/` (see `spike/README.md`). It tests mini-gl upstream at commit `28238857` (v0.1.19) as-is, with SRGB8 intermediates, against a fork that changes one thing: RGBA16F intermediates. It was run in headless Chrome 154 on SwiftShader in the dev VM, driven over CDP from Node's built-in WebSocket (no npm). **SwiftShader is a software GPU, so none of its timings are meaningful.** Only correctness carries over.
+
+- **Orientation:** Chrome uploads EXIF-rotated JPEGs to the WebGL texture upright, and `naturalWidth`/`naturalHeight` are already rotated. The render is therefore upright, and the server should reset Orientation to 1 when it splices Exif back in. Safari is unverified.
+- **Exif:** `canvas.toBlob` output carries no Exif. Splicing the original's APP1 right after SOI, with Orientation set to 1, preserves Make, Model, and DateTimeOriginal, and the result still decodes. Only the Exif APP1 is copied and never the ICC profile (APP2), because the render is sRGB. The Kotlin implementation should follow this.
+- **Colour:** the GPU identity path is within 1 level of the browser's own 2D decode (0.02 mean). A JPEG 0.92 round trip adds a mean error of 0.14.
+- **mini-gl's tonal filters have quality defects that precision doesn't fix.** On a 256-level gray ramp, each tool alone at a mild setting:
+  - Contrast +0.15 clips 53 input levels to black, because it pivots at 0.5 in linear light.
+  - Brightness +0.1 lifts black to gray 44, because it's a linear offset.
+  - A mild S-curve clips 18 levels.
+  - Even an *identity* curve maps input levels 0–6 to 0. The Curves LUT is 256 entries of 8 bits, applied to linear values. This breaks the identity-at-defaults rule in `AGENTS.md`.
+- **Half-float intermediates help, modestly.** On the tonal stack, the largest visible step between levels falls from 9 to 5. But they expose a NaN in Highlights/Shadows: it divides by luminance, which is zero on pure black. 8-bit storage clamped the NaN away, but float keeps it, and the next spatial filter spreads it to neighbouring pixels. Every upstream shader would need auditing for NaN and out-of-range values before running it on float.
+
+Current leaning, to confirm once real-device numbers are in: fork rather than vendor as-is. Keep mini-gl's structure and the parts that hold up (ping-pong runner, sRGB-correct texture handling, perspective warp, blurs, bilateral denoise, vignette, matrix transform, cubic spline). Run on half-float intermediates. Rewrite the tonal tools in a perceptual space, with a float LUT and safe handling of black.
+
+## 2026-10-02 — Phase 1 spike: real-device results (Firefox 156, Linux desktop)
+
+The human ran `spike/` on Firefox 156 on their Linux desktop (16 cores; Firefox masks the GPU name) with a real Olympus E-PL7 JPEG (4608×3456, 15.9 MP). **Every correctness finding from the headless run repeated exactly**: orientation upright (now confirmed in Firefox as well as Chrome), the Exif splice round-trips, the same Curves and contrast clipping, and the same Highlights/Shadows NaN in half-float. With a real GPU, the identity render is *exactly* equal to the browser's 2D decode.
+
+Performance with the 6-tool stack (7 GPU passes):
+- **Interactive preview (1600×1200):** 8 ms per frame with 8-bit intermediates, 13 ms with half-float. Both are comfortably above 60 fps, so the extra precision costs nothing that matters where it's used.
+- **Full resolution (15.9 MP):** 46 ms per frame in 8-bit and 95 ms in half-float. That isn't interactive, but it doesn't need to be: editing runs on the preview-sized copy, and full resolution only renders on save.
+- **Full-resolution save:** about 630 ms end to end (render, `readPixels`, `putImageData`, `toBlob` JPEG at 0.92, Exif splice), with no context loss.
+- **Banding:** on the tonal stack, half-float halves the biggest visible step between levels (11 to 5) and keeps more distinct levels (188 against 161).
+
+The human's verdict on feel: "pretty good". The sliders felt a little sensitive, since nobody uses the full range outside of deliberate art effects. That points at mini-gl's mapping from parameter to strength, which the tonal rewrite owns anyway. Snapseed-style ±100 sliders with a gentler response near zero belong in each op's parameter schema.
+
+Still untested: Safari and iPad. That only matters if they're target devices (brief §5).
+
+**Proposed, awaiting the human's sign-off: fork mini-gl into `frontend/src/pipeline/`** rather than vendoring it as-is:
+- **Keep:** the ping-pong runner, sRGB-correct texture handling, and the perspective, blur, bilateral denoise, vignette, matrix and spline code.
+- **Switch:** intermediates to half-float.
+- **Rewrite:** brightness, contrast, curves and highlights/shadows. They should work in a perceptual space, use a float LUT, handle black without NaN, and use softer slider response curves.
+- **Edit on a preview-sized source** (the server's 2048 px preview), and render the original at full resolution only on save.
+
+## 2026-10-02 — Phase 1 spike: phone results (Firefox 157, Android, Pixel 7a)
+
+Tested with a real Pixel 7a JPEG (3024×4032, 12.2 MP). Firefox masks the GPU name. Every correctness result repeated on mobile: orientation upright, an exact identity against the 2D decode, the Exif splice OK, and the same tonal defects and half-float NaN.
+
+- **Preview (1200×1600):** median 13 ms per frame in 8-bit and 20 ms in half-float. The half-float p95 is 34 ms, so there are occasional dropped frames, but it's usable. If phones become a primary target, a smaller preview on phones is the obvious lever.
+- **Full resolution:** 33 ms (8-bit) and 38 ms (half-float) per frame.
+- **Full-resolution save:** 489 ms (8-bit) and 527 ms (half-float). No context loss.
+- **Banding (tonal stack):** the biggest step goes from 7 to 6, and distinct levels from 173 to 193.
+
+**GPUs don't produce bit-identical output.** The identity Curves error is 6 levels on the desktop and 7 on the phone. The same recipe re-rendered on a different device can therefore differ by a level or two. That's fine, because the stored render is the truth (brief §4). But `AGENTS.md`'s "a saved recipe must always reopen to the same pixels" has to mean *visually the same, within a tested tolerance*, and the pipeline tests must compare with a tolerance rather than exact equality.
+
+## 2026-10-02 — mini-gl provenance audit: what the fork may and may not carry over
+
+proof is GPL-3.0-or-later. mini-gl itself is MIT (© 2025 xdadda) and is derived from glfx.js, also MIT (© 2011 Evan Wallace). MIT code can be included in a GPL-3 work as long as both copyright and permission notices are kept. **But several mini-gl filters cite outside sources whose licences are *not* MIT**, and mini-gl's MIT licence can't relicense code its author didn't own. Going through each file:
+
+| Upstream piece | Cited origin | Verdict |
+|---|---|---|
+| `minigl.js` core (Shader, Texture, ping-pong runner) | glfx.js (MIT) | **Keep.** Retain both MIT notices. |
+| `filters/cubicspline.js` | glfx.js (MIT) | **Keep.** |
+| `filters/filterPerspective.js` | glfx.js (MIT), with the math noted as "from javax.media.jai.PerspectiveTransform" | **Keep.** The standard square-to-quad homography is a formula, not copyrightable expression. |
+| `filters/filterMatrix.js` | mini-gl's own | **Keep.** |
+| `filters/filterCurves.js` | glfx.js (MIT) | Licence fine, but **rewrite** (an 8-bit linear LUT breaks identity). |
+| `filterAdjustments` (brightness, contrast, saturation, exposure, temperature, tint, vibrance, clarity, vignette) | Comments say "from" **Pintura** (a proprietary commercial editor), a tsev.dev blog post (no stated licence), and PixiJS (MIT) | **Don't carry over.** The colour matrices themselves are textbook math, but the file explicitly says it was taken partly from proprietary code. Rewrite from first principles. The tonal parts needed rewriting anyway. |
+| `filterHighlightsShadows` | A Stack Overflow answer from 2014, so **CC BY-SA 3.0**, which isn't compatible with GPLv3 (only CC BY-SA 4.0 is one-way compatible) | **Don't carry over.** It's being replaced anyway, with a local, mask-based version. |
+| `filterNoise` (bilateral), `filterBloom`, `filterBlurGaussian`, `filterBlurBokeh` | **Shadertoy** shaders. Shadertoy's default licence is CC BY-NC-SA 3.0 unless the author states otherwise, and those pages couldn't be fetched to check. | **Don't carry over.** "NonCommercial" is an extra restriction the GPL forbids. Gaussian and bilateral filters are textbook algorithms, so we write our own. Bloom and bokeh aren't v1 tools. |
+| `filters/filterInsta.js`, `filters/filterBlend.js` | mini-gl | **Drop.** Not needed. |
+
+This narrows the "keep" list in the previous fork proposal: **blurs, bilateral denoise, and vignette are no longer kept.** The fork carries over the GL core and runner, the spline, the perspective warp, and the matrix transform. Every pixel filter is written fresh. darktable (GPL-3.0-or-later, the same licence as proof) can be used as a reference, or even directly, for the harder algorithms such as local contrast and shadows/highlights.
+
+Mechanics for the kept files:
+- Each one gets a header naming the upstream commit, both copyright holders, and what proof changed.
+- Both full MIT texts go in a licences file next to the pipeline code (and in a `NOTICE`/third-party section of the README).
+
+`spike/` vendors the unmodified upstream for testing only. It's never served by the app and gets deleted at the end of Phase 1.
+
+## 2026-10-02 — Phase 1 closed: narrow mini-gl fork, filters from darktable, desktop + Android targets
+
+The human confirmed three things:
+- the **narrow fork** from the provenance audit above;
+- that pipeline **filters will be borrowed from darktable**;
+- that **Safari, iOS, and iPadOS are out of scope for v1**.
+
+v1 targets current Firefox and Chromium-based browsers on desktop and Android. All three spike environments passed, and phones are supported but secondary.
+
+**darktable as the filter source.** darktable is GPL-3.0-or-later, the same licence as proof, so its code can be ported directly. Each file header carries "Copyright (C) <years> darktable developers" and the source path at a pinned commit. The consequence is that proof can never be relicensed to a permissive licence without first removing that code. Its OpenCL kernels (`data/kernels/*.cl`) are the most direct source for GLSL. The two differences that matter: darktable's working space is linear Rec.2020, so primaries-dependent constants need converting, and multi-scale modules become multi-pass ops. Starting points to check when building each op in Phases 8–10, using darktable's `src/iop/` modules and kernels:
+
+| proof tool (Snapseed name) | darktable starting point |
+|---|---|
+| Brightness / exposure | `exposure.c` |
+| Contrast, saturation, vibrance | `colorbalancergb.c` (contrast around a grey fulcrum; perceptual saturation/chroma) |
+| Highlights / Shadows | `shadhi.c` (Gaussian or bilateral mask; `gaussian.cl`, `bilateral.cl`). `toneequal.c` is the more advanced option |
+| Curves | `rgbcurve.c` / `rgbcurve.cl` |
+| Structure (Details) | `bilat.c` "local contrast" (`locallaplacian.cl`, or bilateral grid) |
+| Sharpening (Details) | `sharpen.c` / `sharpen.cl` |
+| White balance / warmth | Linear-light channel gains, informed by `channelmixerrgb.c`'s chromatic adaptation |
+| Vignette | `vignette.c` |
+| Black & White, grain | `channelmixerrgb.c` gray mixing or `monochrome.c`; `grain.c` |
+| Ambiance | No direct equivalent. Decide when building, probably a blend of local contrast and vibrance |
+
+Snapseed sets the UX: which sliders exist, with −100…+100 ranges and a gentle response near zero (the spike found mini-gl's mapping too sensitive). darktable sets the math.
+
+**Half-float is required, with no 8-bit fallback.** Every target browser exposed `EXT_color_buffer_float`. A browser without it gets an "unsupported browser" message.
+
+**The raw results JSON wasn't kept** (at the human's request). Its numbers are recorded in the entries above.
