@@ -1,0 +1,40 @@
+# Contributing to proof
+
+## Before you write any code
+
+Read [`PROJECT_BRIEF.md`](PROJECT_BRIEF.md) for the non-negotiable constraints: no framework, no
+Gradle or Maven, no image or WebGL library, and near-zero dependencies. Then read
+[`AGENTS.md`](AGENTS.md) for the coding conventions. The single most important rule for getting
+a contribution to land cleanly:
+
+**Don't add a dependency without asking first, on either side of the wire.** The Postgres JDBC
+driver, any `kotlinx.*` library, and `kotlin-test` are pre-approved. Anything else, such as a
+JVM library, a JS library, a WebGL helper, a build tool, or an apt package in the image, needs
+to be raised in an issue or PR description before the code that needs it. A reviewer shouldn't
+be the one to discover it in the diff.
+
+## Building and testing locally
+
+```
+cd backend
+./lib/fetch-deps.sh   # downloads and checksum-verifies dependency jars (never committed)
+./build.sh            # compiles src/ with bare kotlinc
+./test.sh             # compiles src/ + test/ and runs the hand-written test runner
+```
+
+The frontend has no build step. Changes take effect on a page reload. To test the edit
+pipeline, open `frontend/test/pipeline.html` in a browser. Each tool is checked against golden
+pixel values and for identity at its default parameters.
+
+## Before opening a PR
+
+- Run `backend/test.sh` and `frontend/test/pipeline.html`, and make sure both pass.
+- If you changed what an existing recipe parameter means, you bumped the recipe schema version
+  and added a migration (see `AGENTS.md`). A saved edit must always reopen to the same pixels.
+- If your change is a real design decision rather than just a bug fix, consider adding an entry
+  to [`docs/decisions.md`](docs/decisions.md) that explains why.
+
+## Reporting bugs / security issues
+
+Regular bugs: open a GitHub issue. Security vulnerabilities: see [`SECURITY.md`](SECURITY.md),
+and please don't open a public issue for those.

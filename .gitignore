@@ -1,0 +1,8 @@
+backend/out/
+backend/out-test/
+backend/lib/*.jar
+docker/data/
+data/
+.env
+.env.*
+docker/.env
