@@ -96,11 +96,17 @@ Saving edits is done: a full-resolution render in the browser, EXIF spliced in o
 
 Docker is done. See `docs/deployment.md`. The compose and standalone images were both smoke-tested end to end against real containers.
 
+## Phase 14 status (2026-10-02)
+
+v1 is built, except export (Phase 12, skipped) and reconciliation (Phase 6, deferred). CI exists but has never run on GitHub: there's no remote yet.
+
+**For the human:**
+- try the whole flow on a real desktop and phone with real photos;
+- create a GitHub repo and push, as with the siblings, so CI runs for real;
+- decide on the brief §5 items still open (purging rejects) and when to pick up export.
+
+Known limitations and deferred items are listed in `decisions.md` (Phase 14 entry).
+
 ## Next step
 
-Phase 14, the last one:
-- FOSS files (README features and the quick start);
-- a GitHub Actions CI workflow on `main` (`docker build --target backend-test`, plus the pipeline test page under headless Chromium);
-- the human's real-device smoke pass.
-
-Phase 12 (export) is skipped at the human's request. Phase 6 (reconciliation) is deferred.
+Whatever the human picks from the list above.

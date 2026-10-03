@@ -38,12 +38,20 @@ where each registered user gets a directory.
 
 The frontend has no build step. Changes take effect on a page reload. To test the edit
 pipeline, serve `frontend/` (`backend/run.sh` does, or `python3 -m http.server` from `frontend/`) and open
-`/test/pipeline.html` in a browser. Each tool is checked against golden
+`/test/pipeline.html` in a browser, or run it headless (this is what CI does):
+
+```
+frontend/test/run-headless.sh   # needs python3 and Chrome/Chromium (set CHROME=... if it isn't found)
+```
+
+The backend tests also run inside Docker, on the same Alpine image the app ships on:
+`docker build -f docker/Dockerfile --target backend-test .` Each tool is checked against golden
 pixel values and for identity at its default parameters.
 
 ## Before opening a PR
 
-- Run `backend/test.sh` and `frontend/test/pipeline.html`, and make sure both pass.
+- Run `backend/test.sh` and `frontend/test/run-headless.sh` (or open `pipeline.html`), and make
+  sure both pass.
 - If you changed what an existing recipe parameter means, you bumped the recipe schema version
   and added a migration (see `AGENTS.md`). A saved edit must always reopen to the same pixels.
 - If your change is a real design decision rather than just a bug fix, consider adding an entry

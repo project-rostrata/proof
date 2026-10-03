@@ -321,3 +321,21 @@ The human asked for the remaining phases to be done in one go, skipping Phase 12
 - **`backend-test` build target.** It runs the backend tests on the same Alpine/musl base the runtime decodes images with. All 102 pass there, which confirms headless AWT and ImageIO thumbnailing works on musl.
 - **`JAVA_TOOL_OPTIONS=-XX:MaxRAMPercentage=60 -Djava.awt.headless=true`.** The default 25 % heap is tight for decoding large photos in a small container.
 - **`frontend/test/` is kept out of images** by `.dockerignore`.
+
+## 2026-10-02 — Phase 14: CI and the smoke pass
+
+- **CI is one workflow** in the siblings' shape: tests gate a GHCR push of the standalone image, and `actions/checkout` is the only action. The backend tests run in the Dockerfile's `backend-test` stage, so they use exactly the shipped toolchain. The browser pipeline tests run through `frontend/test/run-headless.sh`, which uses Python's built-in HTTP server and the runner's preinstalled Chrome with `--dump-dom`, reading a `data-result`/`data-summary` marker the test page sets. That honours `AGENTS.md`'s "never through npm". The runner was checked both ways: 48 pass and exit 0, and an injected failure is reported by name with exit 1. PRs to `main` run the tests but never push.
+- **The automated smoke pass** ran on the production compose image, driving the real UI in headless Chrome:
+  - registered, and created a project;
+  - uploaded 54 photos through the file picker, with every thumbnail loaded in about 11 s;
+  - culled 10 by keyboard, and the view counts matched the expected picks, rejects, and unrated exactly;
+  - edited a pick (Tune plus Straighten), saved it at full resolution, and reopened it with the stack intact. The grid showed the render with the edited badge.
+
+  No page errors. This doesn't replace the human's real-device pass (real GPU, real photos, phone).
+- **Open items carried forward:**
+  - export (Phase 12, skipped);
+  - reconciliation (Phase 6, deferred);
+  - purging rejects (brief §5, still open);
+  - debanding for strong shadow lifts on 8-bit sources (Phase 8 known limitation);
+  - a free-corner Perspective mode (Phase 9);
+  - tiled rendering for photos larger than the GPU's maximum texture size (v2).

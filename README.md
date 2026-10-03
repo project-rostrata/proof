@@ -4,8 +4,8 @@ A small, self-hosted photo editor that runs in your browser. Upload a batch of p
 the way you'd mark up a contact sheet, then edit the keepers with Snapseed-style tools on a
 non-destructive stack.
 
-> **Status: planning.** No code yet. See [`PROJECT_BRIEF.md`](PROJECT_BRIEF.md) and
-> [`V1_PLAN.md`](V1_PLAN.md).
+> **Status: v1 feature-complete except export.** Export (Phase 12) is deferred, and so is
+> reconciliation of changes made outside the app (Phase 6). See [`V1_PLAN.md`](V1_PLAN.md).
 
 ## Why
 
@@ -21,10 +21,56 @@ Your photos live on a real filesystem in their normal form. The originals are ne
 Ratings go in standard XMP sidecars that other tools such as darktable can read, and edits sit
 in a plain `edits/` folder. PostgreSQL is only an index over those files.
 
+## Features
+
+- **Projects and batch upload.**
+  - Drag in or pick a batch of JPEG/PNG photos. Three upload at once, with progress for each, and a
+    100 MB cap per photo.
+  - Re-uploading the same file is harmless.
+  - EXIF is read on upload: capture time, camera, lens, and exposure. Orientation is applied
+    everywhere.
+- **Cull on a contact sheet.**
+  - Keyboard-first: `0`–`5` stars, `P`/`X`/`U` pick, reject, unflag, `6`–`9` colour labels, arrows
+    to move, `Enter` for a full-screen loupe.
+  - Views for All, Picks, Unrated, Rejects, and a minimum rating.
+  - Ratings are saved to standard XMP sidecars that darktable and Lightroom can read. proof merges
+    into an existing sidecar, so darktable's edit history is never overwritten.
+- **Edit with Snapseed-style tools on a non-destructive stack.**
+  - Tune Image: brightness, contrast, saturation, ambiance, highlights, shadows, warmth.
+  - White Balance, Curves, and Details (structure, sharpening).
+  - Crop, Rotate/Straighten, and Perspective.
+  - Vignette, and Black & White with film emulations, colour filters, and grain.
+  - Hold to compare with the original.
+  - Edits render live in the browser on a 16-bit WebGL2 pipeline, with the filters ported from
+    darktable. Saving renders the original at full resolution, copies its EXIF across, and keeps
+    the recipe, so any edit can be reopened and changed later, or reverted.
+- **Accounts:** shelf-style username/password accounts with private, per-user project folders.
+
+## Quick start
+
+```
+docker compose -f docker/docker-compose.yml up -d --build
+```
+
+Then open http://localhost:8080 and register. See [`docs/deployment.md`](docs/deployment.md) for
+the settings that matter before using it for real (the database password, `PROOF_SECURE_COOKIES`,
+`PUID`/`PGID`, and where your photos live), and for the single-container standalone image.
+
+Photos live on disk in their normal form, so they're easy to back up and to reach over SMB:
+
+```
+<data>/<user>/<project>/originals/IMG_0001.jpg      never modified
+<data>/<user>/<project>/originals/IMG_0001.jpg.xmp  rating, pick/reject, label
+<data>/<user>/<project>/edits/IMG_0001.jpg           your saved edit, full resolution
+<data>/<user>/<project>/edits/IMG_0001.jpg.recipe.json
+```
+
 ## Documentation
 
 - [`PROJECT_BRIEF.md`](PROJECT_BRIEF.md): the target design and non-negotiable constraints
 - [`V1_PLAN.md`](V1_PLAN.md): the phased build plan
+- [`docs/architecture.md`](docs/architecture.md): what's built and how the pieces fit
+- [`docs/deployment.md`](docs/deployment.md): how to run it
 - [`docs/decisions.md`](docs/decisions.md): an append-only log of design decisions and why they were made
 - [`AGENTS.md`](AGENTS.md): coding conventions for anyone (human or AI) working on the code
 

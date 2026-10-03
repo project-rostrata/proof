@@ -520,4 +520,7 @@ for (const { name, fn } of tests) {
   }
 }
 document.getElementById("summary").innerHTML = `<span class="${failed ? "fail" : "pass"}">${passed} passed, ${failed} failed</span>`;
+// A machine-readable marker for run-headless.sh, which reads the page back with --dump-dom.
+document.body.dataset.result = failed ? "fail" : "pass";
+document.body.dataset.summary = `${passed} passed, ${failed} failed`;
 window.__pipelineTests = { passed, failed, results };

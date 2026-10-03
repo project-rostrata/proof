@@ -21,6 +21,9 @@ deserve extra scrutiny in reports:
 - **Image decoding.** Crafted JPEG/PNG/EXIF/XMP input that causes excessive memory use, a
   hang, or a crash in the thumbnailer, the EXIF reader, or the XMP parser (for example XML
   external entities) is in scope.
+- **Saved edits.** A save uploads a render and a recipe in one framed request. A way to write
+  outside the project's `edits/` folder, to store a non-JPEG render, or to overwrite another
+  photo's edit is in scope.
 - **Authentication and cross-user access.** Accounts use PBKDF2 password hashes and HttpOnly
   session cookies (`SameSite=Lax`, plus `Secure` when `PROOF_SECURE_COOKIES=true`). Bypassing
   login, or reading or modifying another user's projects,

@@ -3,7 +3,11 @@
 A living doc: it describes the system as it exists right now, not the target design
 (`PROJECT_BRIEF.md` has that). Update it whenever a phase lands.
 
-## Current state: saving edits (V1_PLAN.md Phase 11)
+## Current state: v1 (V1_PLAN.md Phases 1–14; export and reconciliation deferred)
+
+Docker images: see `deployment.md`. CI: `.github/workflows/docker-build.yml` (backend tests in Docker, pipeline tests via `frontend/test/run-headless.sh`, then the standalone image to GHCR).
+
+### Saving edits (Phase 11)
 
 ### Saved edits
 

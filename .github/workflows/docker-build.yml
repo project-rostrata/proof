@@ -1,0 +1,65 @@
+# Tests proof, then builds and pushes the standalone all-in-one image (docker/Dockerfile's
+# `standalone` stage: app plus bundled Postgres, see docs/deployment.md) to GHCR on every push to
+# main and on version tags. Same shape as shelf's and larder's workflows, hand-rolled with plain
+# docker commands: actions/checkout (GitHub's own) is the only action used, and there's no npm.
+name: Test, build and push Docker image
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch: {}
+
+jobs:
+  # Backend tests run inside the Dockerfile's test-only stage, so they use exactly the pinned
+  # images and toolchain the shipped image does (including headless AWT/ImageIO on Alpine musl).
+  test-backend:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and test the backend (Java 25, pinned kotlinc)
+        run: docker build --target backend-test -f docker/Dockerfile .
+
+  # The edit pipeline's tests run in a browser: the runner's preinstalled Chrome, headless, on
+  # SwiftShader (correctness, not speed), served by Python's built-in HTTP server.
+  test-pipeline:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run frontend/test/pipeline.html in headless Chrome
+        run: frontend/test/run-headless.sh
+
+  build-and-push:
+    needs: [test-backend, test-pipeline]
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Build and push the standalone image
+        env:
+          IMAGE: ghcr.io/${{ github.repository }}
+        run: |
+          # GHCR image names must be lowercase; github.repository keeps the owner's casing.
+          IMAGE="${IMAGE,,}"
+          TAGS=("$IMAGE:sha-${GITHUB_SHA::7}")
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            TAGS+=("$IMAGE:${GITHUB_REF_NAME}")
+          else
+            TAGS+=("$IMAGE:latest")
+          fi
+
+          TAG_ARGS=()
+          for t in "${TAGS[@]}"; do TAG_ARGS+=(-t "$t"); done
+
+          docker build --target standalone -f docker/Dockerfile "${TAG_ARGS[@]}" .
+
+          for t in "${TAGS[@]}"; do docker push "$t"; done

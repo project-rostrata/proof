@@ -212,6 +212,11 @@ See `docs/deployment.md`.
 
 `docker/Dockerfile` with pinned images (the same approach as `larder`), `entrypoint.sh` handling `PUID`/`PGID`, and a compose file plus a standalone image that bundles Postgres, as `shelf` does.
 
-## Phase 14 — FOSS files, CI, smoke pass
+## Phase 14 — FOSS files, CI, smoke pass — DONE (except the human's real-device pass)
+
+- **FOSS files:** the README covers features, a quick start, and the on-disk layout. CONTRIBUTING and SECURITY are updated.
+- **CI:** `.github/workflows/docker-build.yml`, on `main`, tags, and PRs. Backend tests run through `docker build --target backend-test`, and pipeline tests through `frontend/test/run-headless.sh` (the runner's preinstalled Chrome, SwiftShader, no npm). On `main` and tags, the standalone image is pushed to GHCR, gated on both.
+- **Automated smoke pass:** run on the production compose image in headless Chrome. 54 photos were uploaded through the file picker, culled by keyboard, and one was edited, saved, and reopened, with no errors.
+- **Still the human's:** the same pass on their real desktop and phone with real photos.
 
 The README, CONTRIBUTING, and SECURITY files finalized. A GitHub Actions workflow on `main` that runs `backend/test.sh` and builds the image, plus optionally `frontend/test/pipeline.html` under apt-installed headless Chromium. Finally, a manual smoke pass through the whole flow (upload 50+ real photos, cull, edit, save, reopen, export) on each target device.
