@@ -1,0 +1,49 @@
+# From the repo root: docker compose -f docker/docker-compose.yml up --build
+# PROOF_DB_PASSWORD, PUID/PGID, PROOF_DATA_DIR, and PROOF_PORT default to throwaway local-dev
+# values. Override them (e.g. in a docker/.env file) for anything beyond that. See
+# docs/deployment.md.
+services:
+  postgres:
+    image: postgres:18.6-alpine
+    environment:
+      POSTGRES_USER: proof
+      POSTGRES_PASSWORD: ${PROOF_DB_PASSWORD:-devpassword}
+      POSTGRES_DB: proof
+    volumes:
+      # Postgres 18+ keeps its data in a version-named subdirectory of /var/lib/postgresql: mount
+      # the parent (https://github.com/docker-library/postgres/pull/1259).
+      - proof-postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U proof"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      # Pinned: the Dockerfile's last stage is `standalone` (bundled Postgres), and a build with no
+      # target builds the last stage.
+      target: runtime
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PROOF_DB_URL: jdbc:postgresql://postgres:5432/proof
+      PROOF_DB_USER: proof
+      PROOF_DB_PASSWORD: ${PROOF_DB_PASSWORD:-devpassword}
+      PROOF_SESSION_DURATION_HOURS: ${PROOF_SESSION_DURATION_HOURS:-720}
+      # Real deployments behind HTTPS must set this to true (docs/deployment.md). False here only
+      # because local development runs over plain HTTP.
+      PROOF_SECURE_COOKIES: ${PROOF_SECURE_COOKIES:-false}
+      PROOF_MAX_UPLOAD_BYTES: ${PROOF_MAX_UPLOAD_BYTES:-100000000}
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+    ports:
+      - "${PROOF_PORT:-8080}:8080"
+    volumes:
+      - ${PROOF_DATA_DIR:-./data}:/data
+
+volumes:
+  proof-postgres-data:

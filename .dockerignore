@@ -1,0 +1,9 @@
+.git
+backend/out
+backend/out-test
+backend/lib/*.jar
+data
+docker/data
+# The pipeline test page is for development and CI (docker build --target pipeline-test isn't a
+# thing: it runs in a browser). It never ships in an image.
+frontend/test

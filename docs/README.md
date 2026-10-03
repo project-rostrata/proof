@@ -11,4 +11,4 @@ Keep this page short. It's an index, not a place to write things up, so put dept
 - **[decisions.md](decisions.md)**: an append-only log of decisions and the reasons for them.
 - **[handoff.md](handoff.md)**: ephemeral session-to-session state.
 
-`deployment.md` gets added with the Docker image (Phase 13).
+- **[deployment.md](deployment.md)**: how to run proof with Docker (compose or standalone).

@@ -195,7 +195,20 @@ Verified with 102 backend tests and editor runs in headless Chrome. A save produ
 
 `GET /api/projects/{id}/export?view=picks` streams a ZIP (`java.util.zip`) containing the render if the photo has been edited, otherwise the original.
 
-## Phase 13 — Docker
+## Phase 13 — Docker — DONE
+
+Built as listed, on pinned `eclipse-temurin:25.0.4_7-*-alpine-3.24` images:
+- **Build stage:** `kotlinc` is checksum-pinned.
+- **`backend-test` target:** all 102 tests pass on Alpine/musl, headless AWT and ImageIO included.
+- **`runtime` target:** a PUID/PGID entrypoint.
+- **`standalone` target:** Postgres 18 bundled, loopback-only.
+
+Smoke-tested via compose and standalone:
+- upload, thumbnails, cull with XMP, and a saved edit with the EXIF splice;
+- host file ownership and `rw-r--r--` permissions;
+- a restart, keeping data and skipping migrations.
+
+See `docs/deployment.md`.
 
 `docker/Dockerfile` with pinned images (the same approach as `larder`), `entrypoint.sh` handling `PUID`/`PGID`, and a compose file plus a standalone image that bundles Postgres, as `shelf` does.
 

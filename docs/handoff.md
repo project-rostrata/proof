@@ -92,11 +92,15 @@ Vignette and Black & White are done, both from darktable. 48 pipeline tests pass
 
 Saving edits is done: a full-resolution render in the browser, EXIF spliced in on the server, reopen, revert, and stale-save protection. 102 backend tests and 48 pipeline tests pass.
 
+## Phase 13 status (2026-10-02)
+
+Docker is done. See `docs/deployment.md`. The compose and standalone images were both smoke-tested end to end against real containers.
+
 ## Next step
 
-Phase 13: Docker.
-- The image is pinned the way `larder`'s is.
-- `entrypoint.sh` handles PUID/PGID.
-- There's a compose file with Postgres, and a standalone image with Postgres bundled, as in shelf.
+Phase 14, the last one:
+- FOSS files (README features and the quick start);
+- a GitHub Actions CI workflow on `main` (`docker build --target backend-test`, plus the pipeline test page under headless Chromium);
+- the human's real-device smoke pass.
 
-Phase 12 (export) is skipped at the human's request.
+Phase 12 (export) is skipped at the human's request. Phase 6 (reconciliation) is deferred.

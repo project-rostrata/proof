@@ -314,3 +314,10 @@ The human asked for the remaining phases to be done in one go, skipping Phase 12
 - **Render file names** follow the original: `IMG_0001.jpg` → `edits/IMG_0001.jpg`, and a PNG's render is `edits/<name>.png.jpg`. Saving is refused if two originals in a project would map to the same render file.
 - **Bug found while verifying, now fixed: proof's files were owner-only (`rw-------`).** Every atomic write goes through `Files.createTempFile`, which creates `0600`, so originals, renders, recipes, and XMP sidecars ended up unreadable to other local users, the SMB daemon included. That defeats the files-as-truth design. They're now set to `rw-r--r--` once in place (`fs/makeShareable`), with a test.
 - **Memory.** The full-resolution render reuses the editor's WebGL context. The preview's textures are dropped first, and the preview is re-uploaded afterwards, so only one context's worth of 16-bit textures is ever alive. A photo larger than the GPU's maximum texture size gets a clear error. Tiled rendering stays a v2 item.
+
+## 2026-10-02 — Phase 13: Docker
+
+- **shelf's pattern:** a build stage, a `runtime` target with a PUID/PGID entrypoint, and a `standalone` target with Postgres bundled. Images are pinned to an exact Temurin patch *and* Alpine release (`25.0.4_7-*-alpine-3.24`), one step stricter than shelf's floating `-alpine`.
+- **`backend-test` build target.** It runs the backend tests on the same Alpine/musl base the runtime decodes images with. All 102 pass there, which confirms headless AWT and ImageIO thumbnailing works on musl.
+- **`JAVA_TOOL_OPTIONS=-XX:MaxRAMPercentage=60 -Djava.awt.headless=true`.** The default 25 % heap is tight for decoding large photos in a small container.
+- **`frontend/test/` is kept out of images** by `.dockerignore`.
