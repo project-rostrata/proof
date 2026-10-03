@@ -13,13 +13,15 @@ deliberately excluded because of where they came from (provenance audit, `docs/d
 
 - `gl.js`: the GL plumbing (context, Texture, Program), restructured from `src/minigl.js`.
 - `runner.js`: the ping-pong stack runner, following `src/minigl.js`'s `runFilter`.
-- `minigl/filters/filterPerspective.js` and `minigl/filters/filterMatrix.js`: still verbatim,
-  rewritten as ops in Phase 9.
+- `geometry.js`: the homography helpers (`squareToQuad`, `invert3`, `multiply3`) from
+  `src/filters/filterPerspective.js`, whose square-to-quad formula comes via glfx.js from
+  javax.media.jai.PerspectiveTransform.
 
-(mini-gl's `cubicspline.js` was dropped in Phase 8, because curves use darktable's monotone Hermite
-interpolation instead.)
+mini-gl's `cubicspline.js` was dropped in Phase 8, because curves use darktable's monotone Hermite
+interpolation. Its `filterMatrix.js` was dropped in Phase 9, because rotation is proof's own maths
+in `geometry.js`. The verbatim seed directory `minigl/` is gone. Its licence text is kept below.
 
-mini-gl's own licence (also kept next to the files as `minigl/LICENSE`):
+mini-gl's licence:
 
 ```
 MIT License

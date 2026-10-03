@@ -35,7 +35,16 @@ function validCurve(points) {
       (i === 0 || p[0] > points[i - 1][0]));
 }
 
+function validRect(r) {
+  return Array.isArray(r) && r.length === 4 && r.every((v) => typeof v === "number" && Number.isFinite(v)) &&
+    r[0] >= 0 && r[1] >= 0 && r[2] >= 0.01 && r[3] >= 0.01 && r[0] + r[2] <= 1 + 1e-9 && r[1] + r[3] <= 1 + 1e-9;
+}
+
 function normalizeParam(spec, value) {
+  if (spec.kind === "rect") return validRect(value) ? [...value] : [...spec.default];
+  if (spec.kind === "choice") return spec.options.includes(value) ? value : spec.default;
+  if (spec.kind === "toggle") return typeof value === "boolean" ? value : spec.default;
+  if (spec.kind === "turns") return Number.isInteger(value) ? ((value % 4) + 4) % 4 : spec.default;
   if (spec.kind === "curves") {
     const curves = {};
     for (const channel of Object.keys(spec.default)) {

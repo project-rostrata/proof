@@ -143,9 +143,19 @@ Verified with 27 pipeline tests in headless Chrome and an end-to-end editor run 
 - A stack view (edit or remove an entry) and a before/after toggle.
 - `frontend/test/pipeline.html`, with golden-pixel tests for each tool at known parameter values, including identity at the default parameters.
 
-## Phase 9 — Geometry tools
+## Phase 9 — Geometry tools — DONE
 
-**Crop** (free and fixed aspect ratios), **Rotate/Straighten** (90° steps plus a fine angle), and **Perspective** (4-corner), all done as UV/vertex transforms. The interactive overlays on the preview are built in this phase.
+Built as listed, with one deliberate change: **Perspective is vertical and horizontal keystone sliders, not four draggable corners.** Keystone covers the common fix (converging verticals), and corner-dragging on a phone-sized preview is fiddly. The maths underneath is a general four-corner homography, so a free-corner mode can be added later without changing the engine.
+
+Also built:
+- Crop aspect presets (Free, Original, 1:1, 3:2, 4:3, 5:4, 16:9, each with a portrait form).
+- Straighten auto-crops to the largest same-aspect rectangle, so there are no blank corners.
+- The editor shows a crop step's input with a crop box, and Rotate and Perspective with an alignment grid.
+- Each op's context is sized from its own input, so tools after a crop or turn work on the new size.
+
+Verified with 42 pipeline tests and the editor driven end to end. See `docs/decisions.md`.
+
+**Crop** (free and fixed aspect ratios), **Rotate/Straighten** (90° steps plus a fine angle), and **Perspective** (keystone; originally planned as 4-corner, see above), all done as an output-to-input pixel mapping. The interactive overlays on the preview are built in this phase.
 
 ## Phase 10 — Looks
 

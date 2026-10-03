@@ -117,9 +117,10 @@ class TexturePool {
   }
 }
 
-// What an op sees while it renders. Every size is in pixels of the image being rendered (the
-// preview or the full-resolution original). Spatial parameters must be derived from `longEdge`,
-// so the preview and the export match (AGENTS.md).
+// What an op sees while it renders. Its size is the op's *input* (the preview or the
+// full-resolution original, after any earlier crop or rotation). Spatial parameters must be derived
+// from `longEdge`, so the preview and the export match (AGENTS.md). Geometry ops return a texture
+// of a different size, and later ops get a context sized to that.
 class PassContext {
   constructor(runner, width, height) {
     this.runner = runner;
@@ -261,17 +262,21 @@ export class Pipeline {
   }
 
   // Renders `recipe` and returns the linear working texture (pooled; caller must release it).
-  // `skipIdentity: false` forces every tool to run even at its identity parameters (used by the
-  // pipeline tests to check that the math really is an identity). `original: true` renders
-  // without the stack (the before/after comparison).
-  renderTexture(recipe, { skipIdentity = true, original = false } = {}) {
+  // Options:
+  //   skipIdentity: false forces every tool to run even at its identity parameters (the pipeline
+  //     tests use it to check that the maths really is an identity);
+  //   original: true renders without the stack (the before/after comparison);
+  //   upTo: renders only the first `upTo` stack entries (the editor shows a crop step's input
+  //     while that crop is being adjusted).
+  renderTexture(recipe, { skipIdentity = true, original = false, upTo = Infinity } = {}) {
     if (!this.source) throw new Error("no source photo");
-    const ctx = new PassContext(this, this.source.width, this.source.height);
-    let current = ctx.pass(DECODE, { inputs: { u_image: this.source }, target: ctx.target() });
+    const decodeCtx = new PassContext(this, this.source.width, this.source.height);
+    let current = decodeCtx.pass(DECODE, { inputs: { u_image: this.source }, target: decodeCtx.target() });
     if (!original) {
-      for (const entry of recipe.stack) {
+      for (const entry of recipe.stack.slice(0, upTo)) {
         const tool = TOOLS[entry.tool];
         if (skipIdentity && tool.isIdentity(entry.params)) continue;
+        const ctx = new PassContext(this, current.width, current.height);
         const next = tool.apply(ctx, current, entry.params);
         if (next !== current) ctx.release(current);
         current = next;

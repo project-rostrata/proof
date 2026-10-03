@@ -7,6 +7,7 @@ import { TOOLS, TOOL_ORDER } from "../src/pipeline/ops/index.js";
 import { loadRecipe, newEntry, emptyRecipe, RecipeError, RECIPE_VERSION } from "../src/pipeline/recipe.js";
 import { curveFunction, IDENTITY_CURVE } from "../src/pipeline/curve.js";
 import { shape } from "../src/pipeline/ops/shared.js";
+import { rotationMapping, straightenScale, apply3 } from "../src/pipeline/geometry.js";
 
 const tests = [];
 const test = (name, fn) => tests.push({ name, fn });
@@ -89,7 +90,7 @@ for (const id of TOOL_ORDER) {
 test("every slider at both extremes stays finite on black, white, primaries and ramps", () => {
   pipeline.setSource(PATTERN.canvas);
   for (const id of TOOL_ORDER) {
-    for (const spec of TOOLS[id].params.filter((p) => p.kind !== "curves")) {
+    for (const spec of TOOLS[id].params.filter((p) => !p.kind)) {
       for (const value of [spec.min, spec.max]) {
         const { values } = pipeline.renderToFloats(recipeOf(entry(id, { [spec.id]: value })));
         const bad = values.findIndex((v) => !Number.isFinite(v));
@@ -97,7 +98,7 @@ test("every slider at both extremes stays finite on black, white, primaries and 
       }
     }
   }
-  const everything = recipeOf(...TOOL_ORDER.map((id) => entry(id, Object.fromEntries(TOOLS[id].params.filter((p) => p.kind !== "curves").map((p) => [p.id, p.max])))));
+  const everything = recipeOf(...TOOL_ORDER.map((id) => entry(id, Object.fromEntries(TOOLS[id].params.filter((p) => !p.kind).map((p) => [p.id, p.max])))));
   const { values } = pipeline.renderToFloats(everything);
   check(values.every(Number.isFinite), "all tools at max: non-finite values");
 });
@@ -293,10 +294,125 @@ test("the same edit at two resolutions looks the same (spatial sizes scale with 
   check(sum / n < 3, `mean difference ${(sum / n).toFixed(2)} levels`);
 });
 
+
+// ---- geometry ----
+
+// Every pixel a distinct colour, so any wrong mapping shows up.
+const LABELLED = image(7, 5, (x, y) => [x * 36, y * 60, 100 + x * 10 + y]);
+
+// Loop-based references for the expected pixel mapping, written from the definitions (not from
+// geometry.js): flip first, then clockwise quarter turns.
+function referenceTurn(src, quarterTurns, flip) {
+  let w = src.width, h = src.height;
+  let get = (x, y) => px(src.pixels, src.width, flip ? src.width - 1 - x : x, y);
+  for (let i = 0; i < quarterTurns; i++) {
+    const prev = get, ph = h;
+    get = (x, y) => prev(y, ph - 1 - x); // clockwise: output (x, y) shows input (y, h - 1 - x)
+    [w, h] = [h, w];
+  }
+  return { width: w, height: h, get };
+}
+
+test("crop copies exactly the chosen pixels, and nothing else", () => {
+  pipeline.setSource(PATTERN.canvas);
+  const { width, height, pixels } = pipeline.renderToPixels(recipeOf(entry("crop", { rect: [0.25, 0.125, 0.5, 0.75] })));
+  check(width === 128 && height === 6, `size ${width}x${height}`);
+  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
+    const got = px(pixels, width, x, y), want = px(PATTERN.pixels, 256, x + 64, y + 1);
+    check(got.every((v, c) => v === want[c]), `(${x},${y}) is ${got}, want ${want}`);
+  }
+});
+
+for (const [quarterTurns, flip] of [[1, false], [2, false], [3, false], [0, true], [1, true], [3, true]]) {
+  test(`rotate ${quarterTurns * 90}°${flip ? " with flip" : ""} moves every pixel exactly where it belongs`, () => {
+    pipeline.setSource(LABELLED.canvas);
+    const { width, height, pixels } = pipeline.renderToPixels(recipeOf(entry("rotate", { quarterTurns, flip })));
+    const ref = referenceTurn(LABELLED, quarterTurns, flip);
+    check(width === ref.width && height === ref.height, `size ${width}x${height}, want ${ref.width}x${ref.height}`);
+    for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
+      const got = px(pixels, width, x, y), want = ref.get(x, y);
+      check(got.every((v, c) => v === want[c]), `(${x},${y}) is ${got}, want ${want}`);
+    }
+  });
+}
+
+test("straighten's auto-crop never shows a blank corner, and is as large as it can be", () => {
+  for (const [w, h] of [[400, 300], [300, 400], [500, 500], [1600, 400]]) {
+    for (let angle = -45; angle <= 45; angle += 5) {
+      const m = rotationMapping(w, h, { quarterTurns: 0, flip: false, angle });
+      const corners = [[0, 0], [m.width, 0], [m.width, m.height], [0, m.height]].map((c) => apply3(m.matrix, c));
+      check(corners.every(([x, y]) => x >= -1 && x <= w + 1 && y >= -1 && y <= h + 1), `${w}x${h} at ${angle}°: a corner falls outside: ${JSON.stringify(corners)}`);
+      if (angle !== 0) {
+        const s = straightenScale(w, h, angle) * 1.02; // 2 % bigger must no longer fit
+        const big = rotationMapping(w * 1.0, h * 1.0, { quarterTurns: 0, flip: false, angle });
+        const grown = [[-0.01, -0.01], [1.01, -0.01], [1.01, 1.01], [-0.01, 1.01]].map(([u, v]) => apply3(big.matrix, [u * big.width * 1.02 / 1.0, v * big.height * 1.02 / 1.0]).map((n) => n));
+        check(s > 0, "scale");
+        check(grown.some(([x, y]) => x < -0.5 || x > w + 0.5 || y < -0.5 || y > h + 0.5), `${w}x${h} at ${angle}°: a 2 % larger crop still fits, so the crop isn't maximal`);
+      }
+    }
+  }
+});
+
+test("a positive straighten angle turns the photo clockwise", () => {
+  // A white dot right of centre on black: turning clockwise moves it down.
+  const src = image(400, 300, (x, y) => (Math.hypot(x - 300, y - 150) < 6 ? [255, 255, 255] : [0, 0, 0]));
+  pipeline.setSource(src.canvas);
+  const { width, height, pixels } = pipeline.renderToPixels(recipeOf(entry("rotate", { angle: 10 })));
+  let sx = 0, sy = 0, n = 0;
+  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) if (px(pixels, width, x, y)[1] > 128) { sx += x + 0.5; sy += y + 0.5; n++; }
+  const cx = sx / n - width / 2, cy = sy / n - height / 2;
+  const t = (10 * Math.PI) / 180, r = 100; // the dot is 100 px right of centre
+  check(Math.abs(cx - r * Math.cos(t)) < 2 && Math.abs(cy - r * Math.sin(t)) < 2, `dot at (${cx.toFixed(1)}, ${cy.toFixed(1)}) from centre, want (${(r * Math.cos(t)).toFixed(1)}, ${(r * Math.sin(t)).toFixed(1)})`);
+});
+
+test("perspective vertical + straightens verticals that converge upwards, with no empty edges", () => {
+  // A vertical line at a quarter of the width: after the correction it leans outwards at the top.
+  const src = image(400, 300, (x) => (Math.abs(x + 0.5 - 100) < 2 ? [255, 255, 255] : [90, 90, 90]));
+  pipeline.setSource(src.canvas);
+  const { width, pixels } = pipeline.renderToPixels(recipeOf(entry("perspective", { vertical: 60 })));
+  const lineX = (row) => { let s = 0, n = 0; for (let x = 0; x < width; x++) if (px(pixels, width, x, row)[1] > 170) { s += x; n++; } return s / n; };
+  const top = lineX(2), bottom = lineX(297);
+  check(top < bottom - 10, `line at x=${top.toFixed(1)} (top) vs ${bottom.toFixed(1)} (bottom)`);
+  check(Math.abs(bottom - 100) < 2, `bottom of the line moved to ${bottom.toFixed(1)}`);
+  for (const [x, y] of [[0, 0], [399, 0], [0, 299], [399, 299]]) check(px(pixels, width, x, y)[1] > 60, `corner (${x},${y}) is empty: ${px(pixels, width, x, y)}`);
+});
+
+test("tools after a crop work on the cropped image (sizes follow the geometry)", () => {
+  pipeline.setSource(GRADIENT.canvas);
+  const { width, height, values } = pipeline.renderToFloats(recipeOf(entry("crop", { rect: [0, 0, 0.5, 0.5] }), entry("tune", { shadows: 80 }), entry("details", { structure: 50 }), entry("rotate", { quarterTurns: 1 })));
+  check(width === 32 && height === 256, `size ${width}x${height}`);
+  check(values.every(Number.isFinite), "non-finite values");
+});
+
+test("geometry gives the same picture at two resolutions", () => {
+  const scene = (size) => image(size, Math.round(size * 0.75), (x, y) => {
+    const u = x / size, v = y / (size * 0.75);
+    return [Math.round(255 * u), Math.round(255 * v), Math.round(128 + 100 * Math.sin(u * 12) * Math.cos(v * 9))];
+  });
+  const recipe = recipeOf(entry("crop", { rect: [0.1, 0.05, 0.8, 0.9] }), entry("rotate", { angle: 7 }), entry("perspective", { vertical: 40, horizontal: -30 }));
+  pipeline.setSource(scene(512).canvas);
+  const big = pipeline.renderToPixels(recipe);
+  pipeline.setSource(scene(256).canvas);
+  const small = pipeline.renderToPixels(recipe);
+  // Each step rounds to whole pixels, so the sizes can be a pixel or two off an exact 2x. Compare
+  // through the actual scale between them.
+  check(Math.abs(big.width / 2 - small.width) <= 2 && Math.abs(big.height / 2 - small.height) <= 2, `sizes ${big.width}x${big.height} vs ${small.width}x${small.height}`);
+  const sx = big.width / small.width, sy = big.height / small.height;
+  let sum = 0, n = 0;
+  for (let y = 1; y < small.height - 1; y++) for (let x = 1; x < small.width - 1; x++) for (let c = 0; c < 3; c++) {
+    const bx = Math.min(big.width - 2, Math.round((x + 0.5) * sx - 1)), by = Math.min(big.height - 2, Math.round((y + 0.5) * sy - 1));
+    const avg = [[0, 0], [1, 0], [0, 1], [1, 1]].reduce((a, [dx, dy]) => a + px(big.pixels, big.width, bx + dx, by + dy)[c], 0) / 4;
+    sum += Math.abs(avg - px(small.pixels, small.width, x, y)[c]);
+    n++;
+  }
+  check(sum / n < 4, `mean difference ${(sum / n).toFixed(2)} levels`);
+});
+
 // ---- engine invariants ----
 
 test("rendering is deterministic, and the texture pool stops growing", () => {
-  const recipe = recipeOf(...TOOL_ORDER.map((id) => entry(id, id === "curves" ? {} : Object.fromEntries(TOOLS[id].params.map((p) => [p.id, 40])))));
+  const recipe = recipeOf(...TOOL_ORDER.map((id) => entry(id, Object.fromEntries(TOOLS[id].params.filter((p) => !p.kind).map((p) => [p.id, Math.min(p.max, 40)])))),
+    entry("crop", { rect: [0.1, 0.1, 0.7, 0.8] }), entry("rotate", { quarterTurns: 1, angle: 3 }));
   const first = render(PATTERN, recipe);
   const poolAfterFirst = pipeline.pool.size();
   for (let i = 0; i < 20; i++) pipeline.renderToPixels(recipe);
@@ -317,6 +433,13 @@ test("loadRecipe fills defaults, clamps, drops unknown params, and refuses unkno
   check(throws({ version: 1, stack: [{ tool: "teleport", params: {} }] }), "unknown tool accepted");
   check(throws({ version: RECIPE_VERSION + 1, stack: [] }), "newer version accepted");
   check(throws({ stack: [] }), "missing version accepted");
+  const geo = loadRecipe({ version: 1, stack: [
+    { tool: "crop", params: { rect: [0.5, 0.5, 0.9, 0.2], aspect: "7:3" } },
+    { tool: "rotate", params: { quarterTurns: 5, flip: "yes", angle: 99 } },
+  ] });
+  check(JSON.stringify(geo.stack[0].params.rect) === "[0,0,1,1]", `crop running off the image not reset: ${geo.stack[0].params.rect}`);
+  check(geo.stack[0].params.aspect === "free", "unknown aspect kept");
+  check(geo.stack[1].params.quarterTurns === 1 && geo.stack[1].params.flip === false && geo.stack[1].params.angle === 45, `rotate not normalised: ${JSON.stringify(geo.stack[1].params)}`);
 });
 
 // ---- run ----

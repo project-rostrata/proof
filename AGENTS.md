@@ -95,6 +95,13 @@ This is the human's standing direction from `larder`: filtering, formatting, and
   - `lut(key, ...)` for cached data textures.
 
   An op **never releases its input**. It releases every scratch texture it doesn't return, and the pipeline tests check that the pool stops growing.
+- **Geometry ops change the image's size.** Crop shrinks it, and quarter turns swap width and height. The runner sizes each op's `PassContext` from that op's *input*, so `ctx.width`, `ctx.height`, and `ctx.longEdge` describe the image as it is at that step. A geometry op declares `geometry: "input"` (the editor shows the step's input with an overlay, as with Crop) or `geometry: "grid"` (live result plus an alignment grid). All three share one warp shader (`ops/geometry-shader.js`):
+  - an output-pixel to input-pixel matrix;
+  - exact copying for crops, turns, and flips;
+  - Catmull-Rom bicubic for fine rotation and perspective.
+
+  Geometry params are normalised (0..1, or degrees), never pixels, so the preview and the export match.
+- **Parameter kinds** beyond numeric sliders: `curves`, `rect` (normalised `[x, y, w, h]`), `choice` (one of `options`), `toggle` (boolean), and `turns` (0–3 clockwise quarter turns). `recipe.js` validates and normalises each kind, and the editor builds a control for each.
 - **Slider response.** Sliders store slider units in the recipe (−100…100, or 0…100). An op converts them with `shape()` (`ops/shared.js`, |v|^1.5) before mapping to darktable's parameter ranges, so the response is gentle near zero.
 - **Spatial parameters are resolution-independent.** Blur radii and similar values are expressed relative to the image's long edge, so editing on the preview-sized source gives the same look as the full-resolution render on save.
 - **Default parameters must be an exact identity.** A tool added at its defaults must not change any pixel beyond float rounding. `frontend/test/pipeline.html` asserts this for every op.

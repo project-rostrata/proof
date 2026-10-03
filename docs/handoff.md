@@ -75,6 +75,17 @@ The edit pipeline core is done:
 
 **Not yet seen on a real GPU or a real photo.** The headless runs use SwiftShader and synthetic images. The human should try the editor on their desktop and phone with real photos, checking feel, slider response, and whether a lifted sky bands (decisions log, known limitation).
 
+## Phase 9 status (2026-10-02)
+
+The geometry tools are done:
+- **Crop:** aspect presets and an interactive crop box.
+- **Rotate:** 90° turns, flip, and straighten with an auto-crop.
+- **Perspective:** vertical and horizontal keystone. This is a deliberate change from the planned four corners (see `decisions.md`).
+
+42 pipeline tests pass, and the editor was driven end to end in headless Chrome. The human is reviewing Phase 8 on real devices. Feedback on slider feel or banding may come back.
+
 ## Next step
 
-Phase 9, the geometry tools (Crop, Rotate/Straighten, Perspective). These rework the two remaining verbatim mini-gl files (`minigl/filters/filterPerspective.js`, `filterMatrix.js`) into ops, and add interactive overlays to the editor.
+Phase 10, looks:
+- **Vignette:** port from darktable `src/iop/vignette.c`.
+- **Black & White:** colour-filter presets plus brightness, contrast, and grain. Port from darktable `channelmixerrgb` gray mixing or `monochrome.c`, and `grain.c`.

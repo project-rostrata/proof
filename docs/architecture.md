@@ -3,7 +3,7 @@
 A living doc: it describes the system as it exists right now, not the target design
 (`PROJECT_BRIEF.md` has that). Update it whenever a phase lands.
 
-## Current state: edit pipeline core (V1_PLAN.md Phase 8)
+## Current state: geometry tools (V1_PLAN.md Phase 9)
 
 ### Edit pipeline (`frontend/src/pipeline/`)
 
@@ -19,18 +19,25 @@ preview JPEG (2048 px, upright) ──> Pipeline.setSource ──> SRGB8 texture
 - **`color.js`:** linear sRGB ↔ XYZ, darktable's CIE 2006 LMS / Filmlight Yrg / Ych and its gamut check, CAT16 white balance along the CIE daylight locus, and CIE Lab (D65). `WHITE_RG` and `WHITE_Y` are computed for proof's matrices, so neutral greys stay exactly neutral and white maps to white.
 - **`curve.js`:** darktable's monotone Hermite interpolation, shared by the LUT and the curve editor's drawing.
 - **`recipe.js`:** `{version: 1, stack: [{tool, params}]}`. `loadRecipe` migrates, defaults, clamps, and refuses unknown tools and newer versions.
+- **`geometry.js`:** the homography (mini-gl/glfx's square-to-quad), crop rounding and aspect presets, quarter-turn, flip, and straighten mapping with its auto-crop scale, and keystone quads.
 - **Tools (`ops/`):**
 
-  | Tool | Sliders | What it runs |
+  | Tool | Parameters | What it runs |
   |---|---|---|
   | Tune Image | brightness, contrast, saturation, ambiance, highlights, shadows, warmth | 1–5 passes |
   | White Balance | temperature, tint | 1 pass, a CAT16 matrix |
   | Curves | RGB, red, green, blue | 1 pass, a cached 1024-entry LUT |
   | Details | structure, sharpening | guided filter at reduced resolution, plus a small Gaussian |
+  | Crop | normalised rect, aspect | exact copy, output = the crop |
+  | Rotate | quarter turns, flip, straighten | exact copy for turns and flips; bicubic and an auto-crop for a fine angle |
+  | Perspective | vertical, horizontal keystone | bicubic homography, output fully covered |
+
+  Each op gets a context sized from its own input, so tools after a crop or turn work on the new size.
 
 ### Editor (`frontend/src/views/Editor.js`)
 
-- **Opening:** E, or the loupe's Edit button, opens a full-screen editor on the photo's 2048 px preview.
+- **Opening:** E, or the loupe's Edit button, opens a full-screen editor on the photo's 2048 px preview. The canvas is fitted into the stage in JS (`layout()`), and overlays sit in a frame of exactly that size.
+- **What the stage shows:** a selected Crop shows its *input* (`upTo`) with a crop box (`components/CropOverlay.js`: shaded outside, rule of thirds, corner and edge handles, aspect-locked corners). Rotate and Perspective show the result up to themselves with a grid. Otherwise the whole stack. **Done** or Enter finishes a tool.
 - **Panel:** add a tool, the stack (select or remove entries), the active tool's sliders or curve editor, and Compare (hold the button or `\`).
 - **Cleanup:** one session at a time, disposed whenever `state.editing` changes. That releases the GL context and the key listeners.
 - **Re-rendering:** the recipe is mutated in place, and only structural changes re-render the panel, so sliders aren't re-created mid-drag.
@@ -71,7 +78,7 @@ A sidecar that can't be parsed returns 409 `SIDECAR_UNREADABLE` and is never ove
 - build scripts and jar fetching (Phase 2);
 - the mini-gl seed (not loaded until Phase 8).
 
-**Backend tests: 90**, none needing Postgres. **Pipeline tests: 27**, in `frontend/test/pipeline.html`. Backend tests added through Phase 7:
+**Backend tests: 90**, none needing Postgres. **Pipeline tests: 42**, in `frontend/test/pipeline.html`. Backend tests added through Phase 7:
 - EXIF in both byte orders, with truncation, random garbage, and a self-referencing IFD;
 - all 8 orientations, checked against an independent reference;
 - type sniffing;
@@ -81,5 +88,5 @@ A sidecar that can't be parsed returns 409 `SIDECAR_UNREADABLE` and is never ove
 - display strings;
 - XMP read/write: the darktable merge, element-form properties, XXE and broken files refused, and byte-stable rewrites.
 
-Not yet present: reconciliation (Phase 6, deferred), geometry tools (Phase 9), looks (Phase 10), saving edits (Phase 11),
+Not yet present: reconciliation (Phase 6, deferred), looks (Phase 10), saving edits (Phase 11),
 export (Phase 12), `docker/` and `docs/deployment.md` (Phase 13).
