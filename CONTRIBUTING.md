@@ -22,6 +22,20 @@ cd backend
 ./test.sh             # compiles src/ + test/ and runs the hand-written test runner
 ```
 
+To run the app, start a throwaway Postgres, point the backend at it, and open
+http://localhost:8080:
+
+```
+docker run -d --rm --name proof-dev-postgres -p 127.0.0.1:5432:5432 \
+  -e POSTGRES_DB=proof -e POSTGRES_USER=proof -e POSTGRES_PASSWORD=devpassword postgres:18.6-alpine
+
+cd backend
+PROOF_DB_URL=jdbc:postgresql://127.0.0.1:5432/proof PROOF_DB_USER=proof PROOF_DB_PASSWORD=devpassword ./run.sh
+```
+
+Migrations apply automatically at startup. `run.sh` defaults `PROOF_DATA` to `../data` (gitignored),
+where each registered user gets a directory.
+
 The frontend has no build step. Changes take effect on a page reload. To test the edit
 pipeline, open `frontend/test/pipeline.html` in a browser. Each tool is checked against golden
 pixel values and for identity at its default parameters.

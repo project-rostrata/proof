@@ -7,6 +7,11 @@ private val testClasses = listOf(
     Class.forName("PathSafetyTestKt"),
     Class.forName("StaticFileHandlerTestKt"),
     Class.forName("ServerTestKt"),
+    Class.forName("MigrationRunnerTestKt"),
+    Class.forName("PasswordHasherTestKt"),
+    Class.forName("CookiesTestKt"),
+    Class.forName("ConnectionPoolTestKt"),
+    Class.forName("UserRootTestKt"),
 )
 
 fun main() {

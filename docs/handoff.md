@@ -40,6 +40,10 @@ Scaffolding is done (see `architecture.md`). The backend builds, runs, and tests
 
 The backend skeleton is done (see `architecture.md`). `run.sh` serves `/api/health` and the frontend. 20 tests pass, and the server was smoke-tested over real HTTP and in headless Chrome.
 
+## Phase 4 status (2026-10-02)
+
+Accounts are done. The human chose `shelf`-style auth. Register, login, logout, and me work against real Postgres 18.6 (smoke-tested), with 46 DB-free tests passing. The `projects`/`photos` tables moved to Phase 5. See `decisions.md` and `architecture.md`. To run locally, see the Postgres one-liner in `CONTRIBUTING.md`.
+
 ## Next step
 
-Phase 4: Postgres 18.6, the migration runner, and `users`/`sessions` from `shelf`, then the `projects`/`photos` tables. **Blocked on a decision:** auth is still open in brief §5. The recommendation is `shelf`-style accounts. Ask the human before building it. The spike was committed in `b71f680` and removed in the next commit. Use `git show b71f680 -- spike/` to see it, including the pinned upstream mini-gl files that Phase 2 copies the kept pieces from.
+Phase 5: the `projects`/`photos` migrations, project CRUD, batch upload, the hand-written EXIF reader, thumbnails and previews, and the first real frontend views (login, project list, upload queue). Still-open brief §5 items that Phase 5 touches are the **max upload size** (proposed 100 MB) and **XMP naming** (that one is needed by Phase 7). Confirm both with the human. The spike was committed in `b71f680` and removed in the next commit. Use `git show b71f680 -- spike/` to see it, including the pinned upstream mini-gl files that Phase 2 copies the kept pieces from.

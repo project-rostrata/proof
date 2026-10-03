@@ -18,7 +18,7 @@ This is the fourth sibling project in this workspace, after `shelf` (a self-host
 
 ## 2. Non-negotiable constraints
 
-- **Backend language: Kotlin**, written directly against the JDK standard library. No web framework: not Spring, not Ktor. Use `com.sun.net.httpserver.HttpServer` with a hand-rolled router, reused from `shelf`'s `Router.kt`. Use `java.sql`/JDBC for Postgres. Use `javax.crypto.SecretKeyFactory` (`PBKDF2WithHmacSHA256`) for password hashing, if auth is confirmed (section 5).
+- **Backend language: Kotlin**, written directly against the JDK standard library. No web framework: not Spring, not Ktor. Use `com.sun.net.httpserver.HttpServer` with a hand-rolled router, reused from `shelf`'s `Router.kt`. Use `java.sql`/JDBC for Postgres. Use `javax.crypto.SecretKeyFactory` (`PBKDF2WithHmacSHA256`) for password hashing (`shelf`-style accounts, section 5).
   - Pre-approved without asking: the Postgres JDBC driver, any `kotlinx.*` library (for example `kotlinx.serialization` for JSON), and `kotlin-test`. Any other dependency needs the human's approval first. Ask before adding it, don't just add it.
 - **No Gradle or Maven.** Compile directly with `kotlinc`, using hand-written `build.sh`/`run.sh`/`test.sh`. No hidden build-tool magic.
 - **Dependency jars are fetched, never committed.** Use a git-tracked `backend/lib/DEPENDENCIES.sha1` manifest plus `backend/lib/fetch-deps.sh`, the same as `shelf`.
@@ -114,7 +114,7 @@ HEIC (iPhone) and camera RAW are deferred to v1.5. Both need a decoder the JDK d
 - **Storage model.** Decided: files as truth, with a Postgres index (section 4).
 - **Store the recipe as well as the render?** Decided: yes, store both (section 4).
 - **v1 input formats.** Decided: JPEG and PNG only.
-- **Auth.** Open. The recommendation is `shelf`-style accounts (username/password, PBKDF2, cookie sessions, a per-user data directory), because personal photos are private data in a way that `press`'s print jobs aren't. The alternative is `press`'s no-auth, trusted-LAN model.
+- **Auth.** Decided: **`shelf`-style accounts**, meaning username/password, PBKDF2, cookie sessions, and a per-user data directory under `$PROOF_DATA/<username>/`. Personal photos are private data in a way that `press`'s print jobs aren't. Built in Phase 4.
 - **Target browsers and devices.** Decided: current **Firefox and Chromium-based browsers on desktop and Android**. Safari, iOS, and iPadOS are out of scope for v1. The Phase 1 spike passed on Firefox for Linux desktop, Firefox for Android (Pixel 7a), and headless Chrome. Phones are supported but aren't the primary target, so the edit UI is designed for desktop first. Snapseed-style touch-first controls such as swipe-to-adjust aren't a v1 requirement.
 - **XMP sidecar naming.** Open. `IMG_0001.jpg.xmp` (darktable-style) or `IMG_0001.xmp` (Lightroom-style; the two collide if `IMG_0001.jpg` and `IMG_0001.png` are both in a project). The proposal is darktable-style.
 - **Max upload size per file.** Open. The proposed default is 100 MB, set by an env var.
@@ -163,7 +163,7 @@ HEIC (iPhone) and camera RAW are deferred to v1.5. Both need a decoder the JDK d
 
 Postgres is an index. Every column here can be rebuilt from the filesystem.
 
-- `users` and `sessions`: as in `shelf`, if auth is confirmed.
+- `users` and `sessions`: as in `shelf`, minus the email, admin, and quota columns.
 - `projects`: `id`, `owner_id`, `name` (also the directory name, validated by path safety), `created_at`, `updated_at`.
 - `photos`:
   - identity and file state: `id`, `project_id`, `filename`, `size_bytes`, `mtime`, `content_sha256`;

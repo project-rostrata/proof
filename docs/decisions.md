@@ -173,3 +173,23 @@ Snapseed sets the UX: which sliders exist, with −100…+100 ranges and a gentl
 - **`resolveUserPath` is renamed to `resolveUnderRoot`.** proof resolves paths against the frontend directory, a user's data directory, and project directories, not only a user's home. The algorithm and its tests are unchanged.
 - **Handler-pool threads are daemons.** `HttpServer.stop()` doesn't shut down a custom executor, so non-daemon pool threads kept the JVM alive after the end-to-end HTTP tests finished (`test.sh` hung after reporting 20/20). The JDK's `HttpServer` dispatcher thread is non-daemon and already keeps a running server alive, so daemon handler threads change nothing in production.
 - **`main()` is split into `buildRouter()` and `createServer()`**, so the HTTP tests exercise exactly the router the app builds, on an ephemeral port.
+
+## 2026-10-02 — Auth: shelf-style accounts (Phase 4)
+
+This resolves brief §5. The human chose **`shelf`-style accounts** over no-auth (`press`'s model) or a single shared password. Personal photos are private, and separate accounts keep room for several household members. What was carried over and what changed:
+
+- **Copied from `shelf` with packages renamed:** `ConnectionPool`, `Database`, `MigrationRunner`, `SessionRepository`, `PasswordHasher` (PBKDF2-HMAC-SHA256, 600k iterations), the cookie helpers, and the login, logout, and me handlers.
+- **Dropped:** `shelf`'s device tokens. The Bearer-token path existed for shelf's Android app, and proof is browser-only, so `requireAuth` resolves the session cookie and nothing else. Also dropped are the unused `email`, `is_admin`, and `quota_bytes` columns.
+- **The session cookie is `proof_session`:** HttpOnly, SameSite=Lax, and Secure when `PROOF_SECURE_COOKIES=true`. Sessions last 30 days by default.
+- **Each user's directory is `$PROOF_DATA/<username>/`.** It's named by username, for the same reason as in shelf: the tree stays readable from outside the app. Usernames follow shelf's safe-segment rule **plus no leading dot**, because `$PROOF_DATA/.cache/` (thumbnails and previews) lives alongside user directories, and a user named `.cache` would collide with it.
+- **Registration is open,** as in shelf. Anyone who can reach the app can create an account. Restricting it (an env flag, or invite-only) is a possible later change, not v1 scope.
+- **The `projects` and `photos` tables moved from Phase 4 to Phase 5,** so each table lands with the code that first writes it. In particular, the EXIF columns get decided together with the EXIF reader.
+- **The DB-backed flow was verified by hand against `postgres:18.6-alpine`:**
+  - registration: 200, then 409 for a duplicate and 400 for a short password;
+  - `/api/me` with a cookie: 200;
+  - logout, then `/api/me`: 401;
+  - a wrong password and an unknown user: an identical 401;
+  - login, then `/api/me`: 200;
+  - restart: no migration re-applied, and the account still logs in.
+
+  The automated suite deliberately stays DB-free, as in shelf. The HTTP tests use a fake connection that fails on any access, which also proves the 401 and validation paths answer without a query.

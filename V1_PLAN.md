@@ -76,13 +76,16 @@ Reuse `shelf`'s pattern directly rather than redesigning it.
 - A static file handler for `frontend/`.
 - (`TestMain.kt`, the hand-rolled reflective test runner, already landed in Phase 2.)
 
-## Phase 4 — Database, migrations, auth
+## Phase 4 — Database, migrations, auth — DONE
 
-- Postgres 18.6, the hand-rolled migration runner, and `users`/`sessions` exactly as in `shelf`, if auth is confirmed (brief §5).
-- `projects` and `photos` tables (brief §7).
+- Postgres 18.6, the hand-rolled migration runner, and `users`/`sessions` as in `shelf` (accounts were confirmed in brief §5). Dropped compared with shelf: device tokens, and the email, admin, and quota columns.
+- Endpoints: `POST /api/register`, `POST /api/login`, `POST /api/logout`, `GET /api/me`, plus `requireAuth` for everything that follows.
+- **Moved to Phase 5:** the `projects` and `photos` tables. Each table lands with the code that first writes it, so the EXIF columns are settled together with the EXIF reader rather than guessed now.
+- Verified: 46 DB-free tests, plus a smoke test of the full register → me → logout → login flow against a real `postgres:18.6-alpine`.
 
 ## Phase 5 — Projects + batch upload + ingest
 
+- Migrations for the `projects` and `photos` tables (brief §7), moved here from Phase 4.
 - Project CRUD. The project name becomes a directory name, so it goes through the path-safety module (`fs/PathSafety.kt`, already in place since Phase 3).
 - `POST /api/projects/{id}/photos`: one file per request, streamed to disk, with JPEG/PNG checked by magic bytes (not by extension or `Content-Type`), within the size cap.
 - An EXIF reader (hand-written TIFF IFD parser) for orientation, capture time, and camera/lens/exposure, unit-tested against a small set of real-camera fixture JPEGs that cover all 8 orientations.
