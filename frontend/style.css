@@ -5,7 +5,10 @@
    mode is the default, and light mode is supported. System fonts only: a self-hosted app
    shouldn't phone home to a font CDN (same reasoning as shelf). */
 
-:root {
+/* The loupe and the editor are always dark, whatever the system theme (a neutral dark surround
+   for judging photos), so they always get the dark tokens. Otherwise the light theme's dark text
+   lands on their dark background. */
+:root, .loupe, .editor {
   color-scheme: dark;
 
   --bg: #121212;

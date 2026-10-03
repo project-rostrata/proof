@@ -408,3 +408,9 @@ Colour labels came in at Phase 7 as a Lightroom convention: keys 6–9, `xmp:Lab
 - a fresh database applies migrations 1–3, and the column is gone;
 - culling a photo whose sidecar holds darktable's `xmp:Label="Blue"` updates the rating and pick and keeps the label;
 - the loupe and grid have no label controls, and key 6 does nothing.
+
+## 2026-10-03 — The loupe and editor always use the dark tokens
+
+The loupe and editor have a fixed dark surround (`#0E0E0E`) in both themes, because photos are judged against neutral dark grey. But the shared components inside them took their colours from the theme tokens. In the light theme that meant near-black text on near-black. The "Add a tool" buttons, Compare, and Close measured 1.1:1 contrast, and the active edit's name 2.7:1.
+
+The dark token set is now declared on `:root, .loupe, .editor` together. Since custom properties set on an element beat inherited ones, these two views get the dark values (and `color-scheme: dark` for native controls) whatever the system theme, with no duplicated values. An automated check of every visible text element in both views, in both schemes, now finds nothing under 3:1.
