@@ -1,4 +1,5 @@
 import proof.image.Rendition
+import proof.image.RenditionGroup
 import proof.image.Renditions
 import proof.image.downscale
 import proof.image.probeSize
@@ -76,4 +77,23 @@ fun testProbeSizeReadsStoredDimensionsWithoutDecoding() = withTemp { dir ->
 fun testDownscaleHitsTheExactLongEdge() {
     val out = downscale(quadrants(6000, 4000), 2048)
     assertEquals(2048 to 1365, out.width to out.height)
+}
+
+// The editor's source preview always comes from the original. Invalidating the display renditions
+// (after a save or revert) leaves it alone.
+fun testSourcePreviewIsSeparateFromTheDisplayRenditions() = withTemp { dir ->
+    val original = dir.resolve("a.jpg")
+    Files.write(original, jpegWithExif(quadrants(3000, 2000), buildTiff(ExifFields(orientation = 6))))
+    val renditions = Renditions(dir.resolve("cache"), 1)
+    val id = java.util.UUID.randomUUID()
+
+    renditions.ensure(id, RenditionGroup.SOURCE, original, 6)
+    renditions.ensure(id, original, 6)
+    renditions.invalidateDisplay(id)
+
+    assertTrue(Files.exists(renditions.path(id, Rendition.SOURCE)))
+    assertFalse(Files.exists(renditions.path(id, Rendition.PREVIEW)))
+    assertFalse(Files.exists(renditions.path(id, Rendition.THUMB)))
+    val source = ImageIO.read(renditions.path(id, Rendition.SOURCE).toFile())
+    assertEquals(1365 to 2048, source.width to source.height)
 }

@@ -146,3 +146,11 @@ fun testNewSidecarsAreIndentedAndStable() = withSidecar { sidecar ->
     Xmp.write(sidecar, CullState(2, FLAG_NONE, null))
     assertEquals(first, Files.readString(sidecar))
 }
+
+// proof's files are meant to be readable by other tools (SMB, darktable), so they must not keep the
+// owner-only permissions of the temp file they were written through.
+fun testWrittenSidecarsAreReadableByOthers() = withSidecar { sidecar ->
+    Xmp.write(sidecar, CullState(1, FLAG_NONE, null))
+    val perms = java.nio.file.attribute.PosixFilePermissions.toString(Files.getPosixFilePermissions(sidecar))
+    assertEquals("rw-r--r--", perms)
+}

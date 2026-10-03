@@ -88,11 +88,15 @@ The geometry tools are done:
 
 Vignette and Black & White are done, both from darktable. 48 pipeline tests pass. The human has asked for Phases 11, 13, and 14 to follow tonight, with no check-ins. Phase 12 (export) is skipped.
 
+## Phase 11 status (2026-10-02)
+
+Saving edits is done: a full-resolution render in the browser, EXIF spliced in on the server, reopen, revert, and stale-save protection. 102 backend tests and 48 pipeline tests pass.
+
 ## Next step
 
-Phase 11: save the render and recipe, reopen, and re-edit. In order:
-- render the *original* at full resolution in the browser;
-- JPEG-encode it;
-- `PUT /api/photos/:id/edit` (server: EXIF splice, atomic write, renditions regenerated);
-- `GET` to reopen the recipe;
-- `DELETE` to revert.
+Phase 13: Docker.
+- The image is pinned the way `larder`'s is.
+- `entrypoint.sh` handles PUID/PGID.
+- There's a compose file with Postgres, and a standalone image with Postgres bundled, as in shelf.
+
+Phase 12 (export) is skipped at the human's request.

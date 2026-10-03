@@ -4,6 +4,7 @@ import org.w3c.dom.Document
 import org.w3c.dom.Element
 import org.xml.sax.ErrorHandler
 import org.xml.sax.SAXParseException
+import proof.fs.makeShareable
 import java.io.ByteArrayInputStream
 import java.io.StringWriter
 import java.nio.file.Files
@@ -171,6 +172,7 @@ object Xmp {
             val body = StringWriter().also { transformer.transform(DOMSource(document), StreamResult(it)) }.toString().trimEnd()
             Files.writeString(tmp, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n$body\n")
             Files.move(tmp, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+            makeShareable(target)
         } finally {
             Files.deleteIfExists(tmp)
         }

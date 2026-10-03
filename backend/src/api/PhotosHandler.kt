@@ -15,6 +15,7 @@ import proof.db.PhotoRow
 import proof.db.ProjectRepository
 import proof.fs.Received
 import proof.fs.isValidPhotoFilename
+import proof.fs.makeShareable
 import proof.fs.isValidProjectName
 import proof.fs.originalsDir
 import proof.fs.receiveUpload
@@ -26,7 +27,9 @@ import proof.image.ExifReader
 import proof.image.FLAGS
 import proof.image.LABELS
 import proof.image.Rendition
+import proof.image.RenditionGroup
 import proof.image.Renditions
+import proof.image.group
 import proof.image.SidecarUnreadable
 import proof.image.Xmp
 import proof.image.probeSize
@@ -59,6 +62,10 @@ data class ApiPhoto(
     val rating: Int,
     val flag: String,
     val label: String?,
+    // Edit state: the editor reopens from the recipe, and always works from the original.
+    val hasEdit: Boolean,
+    val editVersion: String,         // "none" or the saved edit's version: sent back as ?base= on save
+    val sourcePreviewUrl: String,    // a 2048 px preview of the *original*, for the editor
 )
 
 @Serializable
@@ -93,6 +100,9 @@ fun PhotoRow.toApi(): ApiPhoto {
         rating = rating,
         flag = flag,
         label = label,
+        hasEdit = hasEdit,
+        editVersion = editVersion(editMtime),
+        sourcePreviewUrl = renditionUrl(id, "source", mtime),
     )
 }
 
@@ -109,6 +119,7 @@ private const val EXIF_SCAN_BYTES = 1 shl 20
 class PhotosHandler(
     private val projects: ProjectRepository,
     private val photos: PhotoRepository,
+    private val locator: PhotoLocator,
     private val renditions: Renditions,
     private val renditionExecutor: ExecutorService,
     private val dataRoot: Path,
@@ -142,7 +153,9 @@ class PhotosHandler(
     fun cull(ctx: RouteContext, user: AuthenticatedUser): ApiResult<String> {
         val body = runCatching { Json.parseToJsonElement(ctx.readBody()).jsonObject }.getOrNull()
             ?: return Err(400, "INVALID_BODY", "Malformed request body")
-        val (photo, source) = locate(ctx, user) ?: return Err(404, "NOT_FOUND", "No such photo")
+        val located = locator.locate(ctx, user) ?: return Err(404, "NOT_FOUND", "No such photo")
+        val photo = located.photo
+        val source = located.original
         synchronized(CULL_LOCKS[(photo.id.hashCode() and Int.MAX_VALUE) % CULL_LOCKS.size]) {
             val sidecar = Xmp.sidecarFor(source)
             val current = try {
@@ -211,6 +224,7 @@ class PhotosHandler(
             } catch (e: FileAlreadyExistsException) {
                 return Err(409, "FILENAME_TAKEN", "This project already has a different $filename")
             }
+            makeShareable(target)
             val photo = try {
                 photos.insert(
                     NewPhoto(
@@ -253,31 +267,28 @@ class PhotosHandler(
 
     // Thumbnails and previews are generated on first request if the background job hasn't
     // produced them yet (or the cache was cleared).
+    // The display renditions (thumbnail, preview) show the saved render once there is one. The
+    // source preview always shows the original. Missing ones are generated on first request.
     fun rendition(rendition: Rendition): (RouteContext, AuthenticatedUser) -> StreamResult = { ctx, user ->
-        when (val located = locate(ctx, user)) {
+        when (val located = locator.locate(ctx, user)) {
             null -> StreamFailed(Err(404, "NOT_FOUND", "No such photo"))
             else -> {
-                val (photo, source) = located
-                renditions.ensure(photo.id, source, photo.orientation)
+                val photo = located.photo
+                val group = rendition.group()
+                if (group == RenditionGroup.DISPLAY && photo.hasEdit && Files.isRegularFile(located.render)) {
+                    renditions.ensure(photo.id, group, located.render, 1) // renders are saved upright
+                } else {
+                    renditions.ensure(photo.id, group, located.original, photo.orientation)
+                }
                 streamFile(renditions.path(photo.id, rendition), "image/jpeg", IMMUTABLE)
             }
         }
     }
 
     fun original(ctx: RouteContext, user: AuthenticatedUser): StreamResult {
-        val (photo, source) = locate(ctx, user) ?: return StreamFailed(Err(404, "NOT_FOUND", "No such photo"))
-        val type = if (photo.filename.substringAfterLast('.').lowercase() == "png") "image/png" else "image/jpeg"
-        return streamFile(source, type, mapOf("Cache-Control" to "private, no-cache"))
-    }
-
-    private fun locate(ctx: RouteContext, user: AuthenticatedUser): Pair<PhotoRow, Path>? {
-        val owned = ctx.uuidParam("photoId")?.let { photos.findOwned(it, user.id) } ?: return null
-        val source = resolveChild(userRoot(dataRoot, user.username), owned.projectName, ::isValidProjectName)
-            ?.let(::originalsDir)
-            ?.let { resolveChild(it, owned.photo.filename, ::isValidPhotoFilename) }
-            ?.takeIf { Files.isRegularFile(it) }
-            ?: return null
-        return owned.photo to source
+        val located = locator.locate(ctx, user) ?: return StreamFailed(Err(404, "NOT_FOUND", "No such photo"))
+        val type = if (located.photo.filename.substringAfterLast('.').lowercase() == "png") "image/png" else "image/jpeg"
+        return streamFile(located.original, type, mapOf("Cache-Control" to "private, no-cache"))
     }
 
     private fun readHead(path: Path): ByteArray = Files.newInputStream(path).use { it.readNBytes(EXIF_SCAN_BYTES) }

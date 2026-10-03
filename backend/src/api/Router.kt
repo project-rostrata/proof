@@ -85,6 +85,10 @@ class Router {
         routes += Route("POST", parsePattern(pattern), RouteHandler.Json(handler))
     }
 
+    fun put(pattern: String, handler: Handler) {
+        routes += Route("PUT", parsePattern(pattern), RouteHandler.Json(handler))
+    }
+
     fun patch(pattern: String, handler: Handler) {
         routes += Route("PATCH", parsePattern(pattern), RouteHandler.Json(handler))
     }

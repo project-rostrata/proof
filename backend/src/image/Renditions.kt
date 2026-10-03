@@ -22,36 +22,58 @@ private const val JPEG_QUALITY = 0.85f
 enum class Rendition(val longEdge: Int, val fileName: String) {
     THUMB(400, "thumb.jpg"),
     PREVIEW(2048, "preview.jpg"),
+    // The editor always edits the *original* (edits are non-destructive), so it needs a preview of
+    // the original even after the display renditions have switched to the saved render.
+    SOURCE(2048, "source.jpg"),
 }
+
+// Renditions generated together from one decode, largest first.
+enum class RenditionGroup(val members: List<Rendition>) {
+    DISPLAY(listOf(Rendition.PREVIEW, Rendition.THUMB)), // from the saved render once there is one
+    SOURCE(listOf(Rendition.SOURCE)), //                    always from the original
+}
+
+fun Rendition.group(): RenditionGroup = RenditionGroup.entries.first { this in it.members }
 
 class Renditions(private val cacheRoot: Path, decodeSlots: Int) {
     // A decoded 24 MP image is ~100 MB of heap. The semaphore caps how many are decoded at once, so
     // a big batch upload can't exhaust the heap (AGENTS.md "Concurrency").
     private val slots = Semaphore(decodeSlots)
-    private val inflight = ConcurrentHashMap<UUID, CompletableFuture<Unit>>()
+    private val inflight = ConcurrentHashMap<String, CompletableFuture<Unit>>()
 
     fun path(photoId: UUID, rendition: Rendition): Path = cacheRoot.resolve(photoId.toString()).resolve(rendition.fileName)
 
-    // Makes sure both renditions exist for this photo, generating them from `source` if not.
-    // Concurrent callers for the same photo (the post-upload background job and a browser asking
-    // for the thumbnail) share one generation rather than decoding twice.
-    fun ensure(photoId: UUID, source: Path, orientation: Int) {
-        if (Rendition.entries.all { Files.exists(path(photoId, it)) }) return
+    // Makes sure the display renditions (thumbnail and preview) exist, generating them from
+    // `source` if not.
+    fun ensure(photoId: UUID, source: Path, orientation: Int) = ensure(photoId, RenditionGroup.DISPLAY, source, orientation)
+
+    // Makes sure every rendition in `group` exists for this photo, generating them from `source` if
+    // not. Concurrent callers for the same photo and group (the post-upload background job and a
+    // browser asking for the thumbnail) share one generation rather than decoding twice.
+    fun ensure(photoId: UUID, group: RenditionGroup, source: Path, orientation: Int) {
+        if (group.members.all { Files.exists(path(photoId, it)) }) return
+        val key = "$photoId:${group.name}"
         val mine = CompletableFuture<Unit>()
-        val running = inflight.putIfAbsent(photoId, mine)
+        val running = inflight.putIfAbsent(key, mine)
         if (running != null) {
             running.join()
             return
         }
         try {
-            generate(photoId, source, orientation)
+            generate(photoId, group, source, orientation)
             mine.complete(Unit)
         } catch (e: Exception) {
             mine.completeExceptionally(e)
             throw e
         } finally {
-            inflight.remove(photoId)
+            inflight.remove(key)
         }
+    }
+
+    // Drops the display renditions only (after an edit is saved or reverted). The source preview
+    // is still valid, because the original didn't change.
+    fun invalidateDisplay(photoId: UUID) {
+        for (r in RenditionGroup.DISPLAY.members) Files.deleteIfExists(path(photoId, r))
     }
 
     fun delete(photoId: UUID) {
@@ -60,18 +82,20 @@ class Renditions(private val cacheRoot: Path, decodeSlots: Int) {
         Files.walk(dir).use { paths -> paths.sorted(Comparator.reverseOrder()).forEach(Files::delete) }
     }
 
-    private fun generate(photoId: UUID, source: Path, orientation: Int) {
+    private fun generate(photoId: UUID, group: RenditionGroup, source: Path, orientation: Int) {
         slots.acquire()
         try {
             // Downscale before rotating: the long edge is the same either way, and rotating a
-            // 2048 px image is far cheaper than rotating the full-resolution one.
-            val decoded = decodeForLongEdge(source, Rendition.PREVIEW.longEdge)
-            val preview = applyOrientation(downscale(toRgb(decoded), Rendition.PREVIEW.longEdge), orientation)
-            val thumb = downscale(preview, Rendition.THUMB.longEdge)
-            val dir = cacheRoot.resolve(photoId.toString())
-            Files.createDirectories(dir)
-            writeJpeg(preview, path(photoId, Rendition.PREVIEW))
-            writeJpeg(thumb, path(photoId, Rendition.THUMB))
+            // 2048 px image is far cheaper than rotating the full-resolution one. Each smaller
+            // member is made from the one before it.
+            val largest = group.members.first()
+            val decoded = decodeForLongEdge(source, largest.longEdge)
+            var image = applyOrientation(downscale(toRgb(decoded), largest.longEdge), orientation)
+            Files.createDirectories(cacheRoot.resolve(photoId.toString()))
+            for (rendition in group.members) {
+                image = downscale(image, rendition.longEdge)
+                writeJpeg(image, path(photoId, rendition))
+            }
         } finally {
             slots.release()
         }

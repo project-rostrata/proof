@@ -1,7 +1,9 @@
 import com.sun.net.httpserver.HttpServer
+import proof.api.EditsHandler
 import proof.api.LoginHandler
 import proof.api.LogoutHandler
 import proof.api.MeHandler
+import proof.api.PhotoLocator
 import proof.api.PhotosHandler
 import proof.api.ProjectsHandler
 import proof.api.RegisterHandler
@@ -93,7 +95,9 @@ fun buildRouter(
 
     val staticFileHandler = StaticFileHandler(frontendDir)
     val projectsHandler = ProjectsHandler(projects, photos, renditions, dataRoot)
-    val photosHandler = PhotosHandler(projects, photos, renditions, renditionExecutor, dataRoot, maxUploadBytes)
+    val locator = PhotoLocator(photos, dataRoot)
+    val photosHandler = PhotosHandler(projects, photos, locator, renditions, renditionExecutor, dataRoot, maxUploadBytes)
+    val editsHandler = EditsHandler(photos, locator, renditions, renditionExecutor, dataRoot, maxUploadBytes)
     val registerHandler = RegisterHandler(users, sessions, dataRoot, authConfig)
     val loginHandler = LoginHandler(users, sessions, authConfig)
     val logoutHandler = LogoutHandler(sessions, authConfig.secureCookies)
@@ -115,6 +119,10 @@ fun buildRouter(
     router.getStream("/api/photos/:photoId/preview", requireAuthStream(sessions, users, photosHandler.rendition(Rendition.PREVIEW)))
     router.getStream("/api/photos/:photoId/original", requireAuthStream(sessions, users, photosHandler::original))
     router.patch("/api/photos/:photoId", requireAuth(sessions, users, photosHandler::cull))
+    router.getStream("/api/photos/:photoId/source", requireAuthStream(sessions, users, photosHandler.rendition(Rendition.SOURCE)))
+    router.get("/api/photos/:photoId/edit", requireAuth(sessions, users, editsHandler::get))
+    router.put("/api/photos/:photoId/edit", requireAuth(sessions, users, editsHandler::put))
+    router.delete("/api/photos/:photoId/edit", requireAuth(sessions, users, editsHandler::delete))
     router.serveStatic(staticFileHandler::serve)
     return router
 }

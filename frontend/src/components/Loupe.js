@@ -20,7 +20,7 @@ export function Loupe() {
       { class: "loupe", role: "dialog", "aria-label": photo.filename },
       ...neighbours,
       div({ class: "loupe-stage", onclick: (e) => { if (e.target === e.currentTarget) state.loupeOpen.val = false; } },
-        img({ class: "loupe-image", src: photo.previewUrl, alt: photo.filename })),
+        img({ class: "loupe-image", src: () => photos[index].val.previewUrl, alt: photo.filename })),
       button({ class: "loupe-nav loupe-prev", "aria-label": "Previous", disabled: index === 0, onclick: () => step(-1) }, "‹"),
       button({ class: "loupe-nav loupe-next", "aria-label": "Next", disabled: index === photos.length - 1, onclick: () => step(1) }, "›"),
       div(

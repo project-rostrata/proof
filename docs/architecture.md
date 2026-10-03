@@ -3,7 +3,30 @@
 A living doc: it describes the system as it exists right now, not the target design
 (`PROJECT_BRIEF.md` has that). Update it whenever a phase lands.
 
-## Current state: looks (V1_PLAN.md Phase 10)
+## Current state: saving edits (V1_PLAN.md Phase 11)
+
+### Saved edits
+
+```
+Editor ──Save──> fetch original ─> createImageBitmap (upright) ─> Pipeline.renderToPixels(recipe), full resolution
+       ─> canvas.toBlob(JPEG 0.92) ─> PUT /api/photos/:id/edit?base=<editVersion>
+          body: [4-byte recipe length][recipe JSON][JPEG]   (fs/EditBody.kt)
+Server: check base (409 EDIT_CHANGED) ─> parse the frame (recipe must be {version:int, stack:[]}; render must be a JPEG)
+        ─> splice the original's EXIF in (JpegExif: orientation reset to 1, no ICC)
+        ─> atomic writes: edits/<render name> + edits/<original>.recipe.json (rw-r--r--)
+        ─> photos.has_edit / edit_mtime / recipe_version ─> regenerate the display renditions from the render
+GET /api/photos/:id/edit    -> {editVersion, recipe}   (reopen; the frontend migrates it with loadRecipe)
+DELETE /api/photos/:id/edit -> deletes both files and reverts the thumbnails to the original
+GET /api/photos/:id/source  -> a 2048 px preview of the *original* (the editor always edits the original)
+```
+
+- **Render names:** `IMG_0001.jpg` → `edits/IMG_0001.jpg`, `scan.png` → `edits/scan.png.jpg`. Two originals that would share a render file are refused (409).
+- **Renditions:** two groups. DISPLAY (thumbnail and preview) comes from the render once there is one. SOURCE comes from the original. A save or revert invalidates DISPLAY only.
+- **Editor:**
+  - Save is enabled only with unsaved changes. The footer shows Unsaved changes, Saved, or progress.
+  - Revert appears when there's a saved edit.
+  - Closing asks only when there are unsaved changes.
+  - The grid's thumbnail and the loupe's preview `src` follow the photo's state, so a save shows up immediately, with a ✎ badge on edited frames.
 
 ### Edit pipeline (`frontend/src/pipeline/`)
 
@@ -43,7 +66,6 @@ preview JPEG (2048 px, upright) ──> Pipeline.setSource ──> SRGB8 texture
 - **Panel:** add a tool, the stack (select or remove entries), the active tool's sliders or curve editor, and Compare (hold the button or `\`).
 - **Cleanup:** one session at a time, disposed whenever `state.editing` changes. That releases the GL context and the key listeners.
 - **Re-rendering:** the recipe is mutated in place, and only structural changes re-render the panel, so sliders aren't re-created mid-drag.
-- **Saving:** not yet (Phase 11). Closing with edits asks for confirmation.
 
 ### Cull (Phase 7)
 
@@ -80,7 +102,7 @@ A sidecar that can't be parsed returns 409 `SIDECAR_UNREADABLE` and is never ove
 - build scripts and jar fetching (Phase 2);
 - the mini-gl seed (not loaded until Phase 8).
 
-**Backend tests: 90**, none needing Postgres. **Pipeline tests: 48**, in `frontend/test/pipeline.html`. Backend tests added through Phase 7:
+**Backend tests: 102**, none needing Postgres. **Pipeline tests: 48**, in `frontend/test/pipeline.html`. Backend tests added through Phase 7:
 - EXIF in both byte orders, with truncation, random garbage, and a self-referencing IFD;
 - all 8 orientations, checked against an independent reference;
 - type sniffing;
@@ -90,5 +112,5 @@ A sidecar that can't be parsed returns 409 `SIDECAR_UNREADABLE` and is never ove
 - display strings;
 - XMP read/write: the darktable merge, element-form properties, XXE and broken files refused, and byte-stable rewrites.
 
-Not yet present: reconciliation (Phase 6, deferred), saving edits (Phase 11),
+Not yet present: reconciliation (Phase 6, deferred), export (Phase 12, skipped for now),
 export (Phase 12), `docker/` and `docs/deployment.md` (Phase 13).

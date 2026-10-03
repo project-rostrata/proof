@@ -103,6 +103,24 @@ class PhotoRepository(private val database: Database) {
         )
     }
 
+    fun updateEdit(id: UUID, editMtime: java.time.Instant, recipeVersion: Int) {
+        database.update(
+            "UPDATE photos SET has_edit = true, edit_mtime = ?, recipe_version = ? WHERE id = ?",
+            bind = { stmt ->
+                stmt.setTimestamp(1, Timestamp.from(editMtime))
+                stmt.setInt(2, recipeVersion)
+                stmt.setObject(3, id)
+            },
+        )
+    }
+
+    fun clearEdit(id: UUID) {
+        database.update("UPDATE photos SET has_edit = false, edit_mtime = NULL, recipe_version = NULL WHERE id = ?", bind = { it.setObject(1, id) })
+    }
+
+    fun filenamesInProject(projectId: UUID): List<String> =
+        database.queryList("SELECT filename FROM photos WHERE project_id = ?", bind = { it.setObject(1, projectId) }, mapRow = { it.getString("filename") })
+
     fun idsForProject(projectId: UUID): List<UUID> =
         database.queryList(
             "SELECT id FROM photos WHERE project_id = ?",
@@ -110,7 +128,7 @@ class PhotoRepository(private val database: Database) {
             mapRow = { it.getObject("id", UUID::class.java) },
         )
 
-    private fun findById(id: UUID): PhotoRow? =
+    fun findById(id: UUID): PhotoRow? =
         database.queryOneOrNull(
             "SELECT $PHOTO_COLUMNS FROM photos ph WHERE ph.id = ?",
             bind = { it.setObject(1, id) },

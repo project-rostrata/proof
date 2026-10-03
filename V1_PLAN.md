@@ -171,7 +171,15 @@ Both tools are ported from darktable:
 
 **Vignette** and **Black & White** (color-filter presets, plus brightness, contrast, and grain).
 
-## Phase 11 — Save, reopen, re-edit
+## Phase 11 — Save, reopen, re-edit — DONE
+
+Built as listed, with these details:
+- **The request:** the save is one framed request (`[4-byte recipe length][recipe JSON][JPEG]`) rather than multipart, so there's no parser to hand-write.
+- **Stale saves:** `?base=<editVersion>` rejects a save that started from an older edit (409).
+- **Non-destructive editing:** the editor always edits the *original*, through a separate original-based 2048 px preview (`/api/photos/:id/source`).
+- **Two smaller fixes:** files proof writes are now `rw-r--r--` (they were owner-only), and render names can't collide.
+
+Verified with 102 backend tests and editor runs in headless Chrome. A save produced a full-resolution render, upright, with EXIF; reopen, revert, and the stale-save refusal were all checked. See `docs/decisions.md`.
 
 - `PUT /api/photos/{id}/edit`, a multipart or two-part upload with the rendered JPEG and the recipe JSON:
   - check the render by magic bytes;

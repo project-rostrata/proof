@@ -1,10 +1,11 @@
 import van from "../../lib/van-1.6.1.js";
-import { state } from "../state.js";
+import { state, showError } from "../state.js";
 import { Pipeline, PipelineUnsupported } from "../pipeline/runner.js";
 import { TOOLS, TOOL_ORDER } from "../pipeline/ops/index.js";
 import { ASPECT_OPTIONS } from "../pipeline/ops/crop.js";
 import { aspectRatio, centredRect } from "../pipeline/geometry.js";
-import { emptyRecipe, newEntry } from "../pipeline/recipe.js";
+import { emptyRecipe, newEntry, loadRecipe, RecipeError } from "../pipeline/recipe.js";
+import { api, saveEdit, ApiError } from "../api.js";
 import { Slider } from "../components/Slider.js";
 import { CurveEditor } from "../components/CurveEditor.js";
 import { Choice } from "../components/Choice.js";
@@ -14,10 +15,13 @@ import { emptyNode } from "../vanHelpers.js";
 
 const { div, canvas, button, span, h2, p, ol, li } = van.tags;
 
-// The edit view: the photo's 2048 px preview rendered live through the pipeline, plus a Snapseed-
-// style stack of tools. Rendering is the one piece of logic that runs in the browser
-// (PROJECT_BRIEF.md §4). Saving the render and recipe comes in V1_PLAN.md Phase 11. Until then an
-// edit lives only as long as this view is open.
+// The edit view: a 2048 px preview of the *original* rendered live through the pipeline, plus a
+// Snapseed-style stack of tools. Rendering is the one piece of logic that runs in the browser
+// (PROJECT_BRIEF.md §4).
+//
+// Saving renders the original at full resolution through the same recipe, JPEG-encodes it, and
+// uploads it with the recipe. The server stores both and makes thumbnails from the render.
+// Reopening loads the saved recipe, so edits stay non-destructive.
 //
 // The recipe is a plain object mutated in place. Only structural changes (adding, removing, or
 // selecting a stack entry) re-render the panel, so a slider is never re-created mid-drag.
@@ -38,7 +42,7 @@ export function Editor() {
     disposeSession?.();
     disposeSession = null;
     if (!photoState) return emptyNode();
-    const session = EditorSession(photoState.rawVal);
+    const session = EditorSession(photoState);
     disposeSession = session.dispose;
     return session.element;
   };
@@ -46,8 +50,14 @@ export function Editor() {
 
 const ASPECT_LABELS = { free: "Free", original: "Original" };
 
-function EditorSession(photo) {
+function EditorSession(photoState) {
+  const photo = photoState.rawVal;
   const recipe = emptyRecipe();
+  const dirty = van.state(false); //       unsaved changes since opening or the last save
+  const saving = van.state(null); //       null, or a progress message while saving
+  const hasSavedEdit = van.state(photo.hasEdit);
+  let base = photo.editVersion; //         the saved edit this session started from (sent on save)
+  let previewImage = null;
   const structure = van.state(0); // bumped when the stack changes shape or the selection changes
   const selected = van.state(-1);
   const compare = van.state(false);
@@ -88,7 +98,7 @@ function EditorSession(photo) {
     if (!pipeline || frame) return;
     frame = requestAnimationFrame(() => {
       frame = 0;
-      if (!pipeline) return;
+      if (!pipeline?.source) return; // still loading, or already closed
       if (pipeline.lost) {
         status.val = { kind: "error", message: "The graphics context was lost. Close the editor and open it again." };
         return;
@@ -107,24 +117,90 @@ function EditorSession(photo) {
     try {
       pipeline = new Pipeline(stage);
       const img = new Image();
-      img.src = photo.previewUrl;
+      img.src = photo.sourcePreviewUrl; // always the original: edits are re-applied, never stacked on a render
+      if (photo.hasEdit) {
+        const saved = await api.getEdit(photo.id);
+        recipe.stack = loadRecipe(saved.recipe).stack;
+        base = saved.editVersion;
+      }
       await img.decode();
+      previewImage = img;
       pipeline.setSource(img);
       status.val = { kind: "ready" };
-      scheduleRender();
+      changed();
     } catch (e) {
-      status.val = { kind: "error", message: e instanceof PipelineUnsupported ? e.message : "The photo couldn't be loaded into the editor." };
+      const message = e instanceof PipelineUnsupported || e instanceof RecipeError || e instanceof ApiError
+        ? e.message : "The photo couldn't be loaded into the editor.";
+      status.val = { kind: "error", message };
     }
   })();
 
   const changed = () => { structure.val++; scheduleRender(); };
+  // Every change to the recipe goes through edited(): it re-renders and marks the session unsaved.
+  const edited = () => { dirty.val = true; scheduleRender(); };
   const select = (index) => { selected.val = index; changed(); };
-  const add = (toolId) => { recipe.stack.push(newEntry(toolId)); select(recipe.stack.length - 1); };
+  const add = (toolId) => { recipe.stack.push(newEntry(toolId)); dirty.val = true; select(recipe.stack.length - 1); };
   const remove = (index) => {
     recipe.stack.splice(index, 1);
     selected.val = Math.min(selected.val, recipe.stack.length - 1);
+    dirty.val = true;
     changed();
   };
+
+  // Save: the original at full resolution, through exactly the preview's recipe, JPEG-encoded and
+  // uploaded with the recipe. The preview source is restored afterwards.
+  async function save() {
+    if (!pipeline || saving.val) return;
+    saving.val = "Rendering at full resolution…";
+    let restored = false;
+    try {
+      const original = await (await fetch(photo.originalUrl, { credentials: "same-origin" })).blob();
+      const bitmap = await createImageBitmap(original, { imageOrientation: "from-image" });
+      pipeline.setSource(bitmap);
+      const { width, height, pixels } = pipeline.renderToPixels(recipe);
+      bitmap.close();
+      pipeline.setSource(previewImage);
+      restored = true;
+      scheduleRender();
+      saving.val = "Encoding…";
+      const canvasEl = document.createElement("canvas");
+      canvasEl.width = width;
+      canvasEl.height = height;
+      canvasEl.getContext("2d").putImageData(new ImageData(new Uint8ClampedArray(pixels.buffer), width, height), 0, 0);
+      const jpeg = await new Promise((resolve, reject) => canvasEl.toBlob((b) => (b ? resolve(b) : reject(new Error("JPEG encoding failed"))), "image/jpeg", 0.92));
+      canvasEl.width = canvasEl.height = 0;
+      const updated = await saveEdit(photo.id, base, recipe, jpeg, (loaded, total) => {
+        saving.val = `Uploading… ${Math.round((100 * loaded) / total)} %`;
+      });
+      photoState.val = updated;
+      base = updated.editVersion;
+      hasSavedEdit.val = true;
+      dirty.val = false;
+    } catch (e) {
+      showError(e instanceof ApiError || e instanceof PipelineUnsupported ? e.message : "Saving failed.");
+      console.error(e);
+    } finally {
+      if (!restored && previewImage && pipeline) { pipeline.setSource(previewImage); scheduleRender(); }
+      saving.val = null;
+    }
+  }
+
+  // Revert: delete the saved edit and go back to the original.
+  async function revert() {
+    if (!confirm("Revert to the original? The saved edit is deleted.")) return;
+    try {
+      const updated = await api.revertEdit(photo.id);
+      photoState.val = updated;
+      base = updated.editVersion;
+      hasSavedEdit.val = false;
+      recipe.stack = [];
+      selected.val = -1;
+      dirty.val = false;
+      changed();
+    } catch (e) {
+      showError(e instanceof ApiError ? e.message : "Reverting failed.");
+    }
+  }
   const dispose = () => {
     cancelAnimationFrame(frame);
     resizeObserver.disconnect();
@@ -134,7 +210,8 @@ function EditorSession(photo) {
     document.removeEventListener("keyup", onKeyUp);
   };
   const close = () => {
-    if (recipe.stack.length && !confirm("Close the editor? Your edits aren't saved yet and will be lost.")) return;
+    if (saving.val) return;
+    if (dirty.val && !confirm("Close the editor? Your unsaved changes will be lost.")) return;
     state.editing.val = null; // the Editor binding disposes this session
   };
   const setCompare = (on) => { if (compare.val !== on) { compare.val = on; changed(); } };
@@ -162,7 +239,7 @@ function EditorSession(photo) {
     if (!tool || compare.val) return emptyNode();
     if (tool.geometry === "input") {
       const entry = selectedEntry();
-      cropOverlay = CropOverlay(entry.params, () => aspectRatio(entry.params.aspect, ...inputSize()), inputSize, () => {});
+      cropOverlay = CropOverlay(entry.params, () => aspectRatio(entry.params.aspect, ...inputSize()), inputSize, () => { dirty.val = true; });
       return cropOverlay.element;
     }
     if (tool.geometry === "grid") return GridOverlay();
@@ -174,6 +251,7 @@ function EditorSession(photo) {
   function CropControls(entry) {
     const aspect = van.state(entry.params.aspect);
     const choose = (a) => {
+      dirty.val = true;
       entry.params.aspect = a;
       aspect.val = a;
       const ratio = aspectRatio(a, ...inputSize());
@@ -188,22 +266,22 @@ function EditorSession(photo) {
         class: () => `btn-ghost btn-small${aspect.val === a ? " is-active" : ""}`, onclick: () => choose(a),
       }, ASPECT_LABELS[a] ?? a))),
       p({ class: "editor-hint" }, "Drag the corners or edges to crop, or drag inside the box to move it. Enter or Done applies it."),
-      button({ class: "btn-ghost btn-small", onclick: () => { entry.params.aspect = "free"; aspect.val = "free"; entry.params.rect = [0, 0, 1, 1]; cropOverlay?.reset(entry.params.rect); } }, "Reset crop"),
+      button({ class: "btn-ghost btn-small", onclick: () => { dirty.val = true; entry.params.aspect = "free"; aspect.val = "free"; entry.params.rect = [0, 0, 1, 1]; cropOverlay?.reset(entry.params.rect); } }, "Reset crop"),
     ];
   }
 
   function RotateControls(entry, tool) {
     const flipped = van.state(entry.params.flip);
-    const turn = (delta) => { entry.params.quarterTurns = (entry.params.quarterTurns + delta + 4) % 4; scheduleRender(); };
+    const turn = (delta) => { entry.params.quarterTurns = (entry.params.quarterTurns + delta + 4) % 4; edited(); };
     return [
       div({ class: "choice-buttons" },
         button({ class: "btn-ghost btn-small", onclick: () => turn(3), title: "Rotate 90° counter-clockwise" }, "↺ 90°"),
         button({ class: "btn-ghost btn-small", onclick: () => turn(1), title: "Rotate 90° clockwise" }, "↻ 90°"),
         button({
           class: () => `btn-ghost btn-small${flipped.val ? " is-active" : ""}`, title: "Flip horizontally",
-          onclick: () => { entry.params.flip = !entry.params.flip; flipped.val = entry.params.flip; scheduleRender(); },
+          onclick: () => { entry.params.flip = !entry.params.flip; flipped.val = entry.params.flip; edited(); },
         }, "Flip")),
-      Slider(tool.params.find((s) => s.id === "angle"), entry.params, scheduleRender),
+      Slider(tool.params.find((s) => s.id === "angle"), entry.params, edited),
       p({ class: "editor-hint" }, "Straightening crops to the largest rectangle that fits, so there are no blank corners."),
     ];
   }
@@ -218,9 +296,9 @@ function EditorSession(photo) {
     else if (tool.id === "rotate") controls = RotateControls(entry, tool);
     else {
       controls = tool.params.map((spec) => {
-        if (spec.kind === "curves") return CurveEditor(entry.params[spec.id], scheduleRender);
-        if (spec.kind === "choice") return Choice(spec, entry.params, scheduleRender);
-        return Slider(spec, entry.params, scheduleRender);
+        if (spec.kind === "curves") return CurveEditor(entry.params[spec.id], edited);
+        if (spec.kind === "choice") return Choice(spec, entry.params, edited);
+        return Slider(spec, entry.params, edited);
       });
       controls.push(p({ class: "editor-hint" }, "Double-click a slider to reset it."));
     }
@@ -273,8 +351,10 @@ function EditorSession(photo) {
           class: "btn-ghost btn-small",
           onpointerdown: () => setCompare(true), onpointerup: () => setCompare(false), onpointerleave: () => setCompare(false),
           title: "Hold to see the original (or hold \\)",
-        }, "Hold to compare"),
-        span({ class: "editor-note" }, "Edits aren't saved yet.")),
+        }, "Compare"),
+        () => (hasSavedEdit.val ? button({ class: "btn-ghost btn-small btn-danger", disabled: () => !!saving.val, onclick: revert }, "Revert") : emptyNode()),
+        span({ class: "editor-note" }, () => saving.val ?? (dirty.val ? "Unsaved changes" : hasSavedEdit.val ? "Saved" : "")),
+        button({ class: "btn-primary btn-small editor-save", disabled: () => !dirty.val || !!saving.val || status.val.kind !== "ready", onclick: save }, "Save")),
     ),
   );
   return { element, dispose };

@@ -39,6 +39,8 @@ export const api = {
   projectPhotos: (id, { view, minRating }) =>
     request("GET", `/api/projects/${id}/photos?${new URLSearchParams({ view, minRating: String(minRating) })}`),
   cull: (photoId, change) => request("PATCH", `/api/photos/${photoId}`, change),
+  getEdit: (photoId) => request("GET", `/api/photos/${photoId}/edit`),
+  revertEdit: (photoId) => request("DELETE", `/api/photos/${photoId}/edit`),
 };
 
 export function uploadPhoto(projectId, file, onProgress) {
@@ -66,5 +68,27 @@ export function uploadPhoto(projectId, file, onProgress) {
     };
     xhr.onerror = () => reject(new ApiError(0, "NETWORK_ERROR", "Network error"));
     xhr.send(file);
+  });
+}
+
+// Saves an edit: one request carrying the recipe and the full-resolution render, framed as
+// [4-byte recipe length][recipe JSON][JPEG] (backend fs/EditBody.kt). `base` is the edit version the
+// editor started from. The server refuses the save (409) if the edit changed since.
+export function saveEdit(photoId, base, recipe, jpeg, onProgress) {
+  const recipeBytes = new TextEncoder().encode(JSON.stringify(recipe));
+  const length = new Uint8Array(4);
+  new DataView(length.buffer).setUint32(0, recipeBytes.length);
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", `/api/photos/${photoId}/edit?base=${encodeURIComponent(base)}`);
+    xhr.upload.onprogress = (e) => { if (e.lengthComputable && onProgress) onProgress(e.loaded, e.total); };
+    xhr.onload = () => {
+      let data = null;
+      try { data = JSON.parse(xhr.responseText); } catch (e) { /* not JSON */ }
+      if (xhr.status >= 200 && xhr.status < 300) resolve(data);
+      else reject(new ApiError(xhr.status, data?.error?.code ?? "UNKNOWN", data?.error?.message ?? (xhr.statusText || "Save failed")));
+    };
+    xhr.onerror = () => reject(new ApiError(0, "NETWORK_ERROR", "Network error"));
+    xhr.send(new Blob([length, recipeBytes, jpeg], { type: "application/octet-stream" }));
   });
 }

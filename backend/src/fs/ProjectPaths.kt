@@ -32,6 +32,14 @@ private fun isSafeSegment(name: String, maxLength: Int): Boolean =
 
 fun isValidProjectName(name: String): Boolean = isSafeSegment(name, 100)
 
+// A saved edit lives next to the originals, in edits/: the render, named like its original
+// (IMG_0001.jpg -> edits/IMG_0001.jpg, scan.png -> edits/scan.png.jpg, since a render is always a
+// JPEG), and the recipe, edits/<original filename>.recipe.json (PROJECT_BRIEF.md §3).
+fun renderName(originalFilename: String): String =
+    if (originalFilename.substringAfterLast('.').lowercase() in setOf("jpg", "jpeg")) originalFilename else "$originalFilename.jpg"
+
+fun recipeName(originalFilename: String): String = "$originalFilename.recipe.json"
+
 private val PHOTO_EXTENSIONS = setOf("jpg", "jpeg", "png")
 
 fun isValidPhotoFilename(name: String): Boolean =

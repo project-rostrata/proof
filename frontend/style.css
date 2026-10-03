@@ -334,3 +334,5 @@ label.btn-primary { position: relative; }
   .editor { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) 45vh; }
   .editor-panel { border-left: none; border-top: 1px solid rgba(255,255,255,.08); }
 }
+.editor-save { margin-left: auto; }
+.edited-badge { font-size: 11px; color: var(--accent); line-height: 1; }

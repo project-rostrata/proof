@@ -70,10 +70,12 @@ function Frame(photoState, index) {
       onclick: () => { state.selected.val = index; },
       ondblclick: () => { state.selected.val = index; state.loupeOpen.val = true; },
     },
-    div({ class: "frame-image" }, img({ src: photo.thumbUrl, alt: photo.filename, loading: "lazy", decoding: "async" })),
+    // src is bound to the photo's state, so a saved edit's new (versioned) thumbnail URL replaces
+    // the old one. Cull changes keep the same URL, so the image isn't reloaded.
+    div({ class: "frame-image" }, img({ src: () => photoState.val.thumbUrl, alt: photo.filename, loading: "lazy", decoding: "async" })),
     () => {
       const p = photoState.val;
-      return div({ class: "frame-cull" }, FlagBadge(p.flag), Stars(p.rating), LabelDot(p.label));
+      return div({ class: "frame-cull" }, FlagBadge(p.flag), Stars(p.rating), LabelDot(p.label), p.hasEdit ? span({ class: "edited-badge", title: "Edited" }, "✎") : "");
     },
     figcaption(photo.filename),
   );
