@@ -37,7 +37,8 @@ Migrations apply automatically at startup. `run.sh` defaults `PROOF_DATA` to `..
 where each registered user gets a directory.
 
 The frontend has no build step. Changes take effect on a page reload. To test the edit
-pipeline, open `frontend/test/pipeline.html` in a browser. Each tool is checked against golden
+pipeline, serve `frontend/` (`backend/run.sh` does, or `python3 -m http.server` from `frontend/`) and open
+`/test/pipeline.html` in a browser. Each tool is checked against golden
 pixel values and for identity at its default parameters.
 
 ## Before opening a PR

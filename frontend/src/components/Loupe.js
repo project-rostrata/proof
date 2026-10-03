@@ -32,6 +32,7 @@ export function Loupe() {
         span({ class: "loupe-name" }, photo.filename),
         span({ class: "loupe-meta" }, [photo.captureDisplay, photo.cameraDisplay, photo.exposureDisplay].filter(Boolean).join("  ·  ")),
         span({ class: "loupe-position" }, `${index + 1} / ${photos.length}`),
+        button({ class: "btn-primary btn-small", onclick: () => { state.editing.val = photos[index]; } }, "Edit"),
         button({ class: "btn-ghost btn-small", onclick: () => { state.loupeOpen.val = false; } }, "Close"),
       ),
     );

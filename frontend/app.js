@@ -8,6 +8,7 @@ import { TopBar } from "./src/components/TopBar.js";
 import { Auth } from "./src/views/Auth.js";
 import { Projects } from "./src/views/Projects.js";
 import { Project } from "./src/views/Project.js";
+import { Editor } from "./src/views/Editor.js";
 
 const { div } = van.tags;
 
@@ -17,7 +18,7 @@ function Root() {
     () => {
       if (!state.authChecked.val) return div({ class: "empty-state" }, "Loading…");
       if (!state.user.val) return Auth({ onSignedIn: initRouter });
-      return div({ class: "app-shell" }, TopBar(), () => (state.projectId.val ? Project() : Projects()));
+      return div({ class: "app-shell" }, TopBar(), () => (state.projectId.val ? Project() : Projects()), Editor());
     },
   );
 }

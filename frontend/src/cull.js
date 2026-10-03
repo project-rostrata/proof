@@ -5,7 +5,7 @@ import { api, ApiError } from "./api.js";
 // 6-9 colour labels (toggle), arrows move, Enter/Space opens the loupe, Esc closes it.
 const LABEL_KEYS = { 6: "Red", 7: "Yellow", 8: "Green", 9: "Blue" };
 
-export const KEY_HELP = "0–5 rate · P pick · X reject · U unflag · 6–9 label · arrows move · Enter loupe · Esc close";
+export const KEY_HELP = "0–5 rate · P pick · X reject · U unflag · 6–9 label · arrows move · Enter loupe · E edit · Esc close";
 
 // Optimistic: the frame updates the moment the key is pressed (it's echoing the user's own input),
 // then takes the server's version of the photo, plus the server's recounted view totals. On
@@ -41,6 +41,7 @@ function columns() {
 }
 
 export function handleKey(e) {
+  if (state.editing.val) return; // the editor has its own keys
   if (!state.projectId.val || !state.photos.val.length) return;
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
@@ -59,6 +60,7 @@ export function handleKey(e) {
   else if (key === "ArrowDown" && !loupe) select(state.selected.val + columns());
   else if (key === "ArrowUp" && !loupe) select(state.selected.val - columns());
   else if ((key === "Enter" || key === " ") && !loupe) state.loupeOpen.val = true;
+  else if (key === "e" || key === "E") state.editing.val = photoState;
   else if (key === "Escape" && loupe) state.loupeOpen.val = false;
   else return;
   e.preventDefault();

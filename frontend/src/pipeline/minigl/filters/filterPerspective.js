@@ -3,6 +3,8 @@
 *  Copied verbatim from mini-gl src/filters/filterPerspective.js at commit 28238857b0499dd39958ae3e45990e78fffdd454
 *  (https://github.com/xdadda/mini-gl), MIT, Copyright (c) 2025 xdadda; mini-gl is itself derived
 *  from glfx.js, MIT, Copyright (C) 2011 by Evan Wallace. Unmodified below this header.
+*  Not loaded by anything yet: its import of ../minigl.js no longer resolves since Phase 8 split
+*  that file into ../gl.js and ../runner.js. Phase 9 rewrites it as an op.
 *  Square-to-quad perspective warp (from glfx.js). Becomes the Perspective op in Phase 9.
 */
 

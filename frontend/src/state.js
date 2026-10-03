@@ -15,6 +15,7 @@ export const state = {
   filter: van.state({ view: "all", minRating: 0 }), // requested view, mirrored in the URL
   selected: van.state(0), // index into photos
   loupeOpen: van.state(false),
+  editing: van.state(null), // the photo state being edited (one of `photos`), or null
 
   uploads: van.state([]), // in-flight and recently finished uploads, see upload.js
   error: van.state(null), // string | null, shown by the Toast component

@@ -26,6 +26,7 @@ function toUrl(projectId, filter) {
 // The project list is fetched *before* switching to it, so it never flashes stale counts. A
 // project page switches first and shows "Loading…" until its photos arrive.
 async function show({ projectId, filter }) {
+  state.editing.val = null;
   state.loupeOpen.val = false;
   if (projectId) {
     if (projectId !== state.projectId.val) {

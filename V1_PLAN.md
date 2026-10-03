@@ -122,7 +122,15 @@ Built as listed, plus:
 - `GET /api/projects/{id}/photos?view=picks|rejects|unrated&minRating=N&sort=...`. All filtering, sorting, counts, and display strings come from the API.
 - Frontend: a grid and a loupe with keyboard controls (`0`–`5`, `P`/`X`/`U`, arrows) and an optimistic update that falls back to the server's response.
 
-## Phase 8 — Edit pipeline core
+## Phase 8 — Edit pipeline core — DONE
+
+Built as listed, with the tools ported from darktable at a pinned commit, and a few differences:
+- **Structure** uses a guided filter, not darktable's local Laplacian (too many passes for interactive WebGL).
+- **Ambiance** is proof's own definition.
+- **Display-referred adaptations** are documented per file.
+- **The editor UI** is reached with **E** or the loupe's Edit button. It has a tool picker, the stack (select or remove entries), per-tool sliders, a curve editor, and Compare (hold the button or `\`). **Edits aren't saved yet** (Phase 11).
+
+Verified with 27 pipeline tests in headless Chrome and an end-to-end editor run against the real stack. See `docs/decisions.md`.
 
 - `src/pipeline/`:
   - the WebGL2 context, with half-float detection and the fallback decided in Phase 1;

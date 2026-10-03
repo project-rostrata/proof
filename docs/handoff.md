@@ -63,12 +63,18 @@ Culling is done:
 
 90 tests pass, and the full keyboard flow was verified in headless Chrome against Postgres 18.6. The smoke test caught a sidecar-bloat bug, now fixed.
 
+## Phase 8 status (2026-10-02)
+
+The edit pipeline core is done:
+- **Engine:** `gl.js` and `runner.js`, restructured from mini-gl with half-float intermediates.
+- **Tools:** Tune Image, White Balance, Curves, and Details, ported from darktable at a pinned commit. The decisions log has the table of sources and divergences.
+- **Recipes:** schema v1 with migrations.
+- **Editor UI:** opens with E, or Edit in the loupe.
+
+27 pipeline tests pass in headless Chrome. The editor was driven end to end against the real stack. **Edits aren't saved yet**: that's Phase 11.
+
+**Not yet seen on a real GPU or a real photo.** The headless runs use SwiftShader and synthetic images. The human should try the editor on their desktop and phone with real photos, checking feel, slider response, and whether a lifted sky bands (decisions log, known limitation).
+
 ## Next step
 
-Phase 8, the edit pipeline core. The details:
-- **Restructure** the verbatim mini-gl seed (`frontend/src/pipeline/minigl/`) into `gl.js` and `runner.js` with half-float intermediates.
-- **Port the first tools from darktable:** exposure, colorbalancergb contrast/saturation, shadhi, rgbcurve, and the local contrast and sharpen modules. The mapping table is in `decisions.md`.
-- **Recipe schema v1.**
-- **Golden-pixel tests** in `frontend/test/pipeline.html`.
-
-This is the largest phase in the plan. The spike was committed in `b71f680` and removed in the next commit. Use `git show b71f680 -- spike/` to see it, including the pinned upstream mini-gl files that Phase 2 copies the kept pieces from.
+Phase 9, the geometry tools (Crop, Rotate/Straighten, Perspective). These rework the two remaining verbatim mini-gl files (`minigl/filters/filterPerspective.js`, `filterMatrix.js`) into ops, and add interactive overlays to the editor.

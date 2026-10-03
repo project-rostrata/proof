@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>proof — pipeline tests</title>
+  <style>
+    :root { color-scheme: dark; }
+    body { margin: 0; padding: 16px; background: #121212; color: #EBEBEB; font: 13px/1.5 system-ui, sans-serif; }
+    h1 { font-size: 16px; margin: 0 0 8px; }
+    #summary { margin: 8px 0 16px; font-weight: 600; }
+    .pass { color: #7BC47F; } .fail { color: #E06C5E; }
+    table { border-collapse: collapse; width: 100%; max-width: 1100px; }
+    td { border-top: 1px solid #2A2A2A; padding: 4px 8px; vertical-align: top; }
+    td:first-child { width: 60px; }
+    .detail { color: #9E9E9E; font-family: ui-monospace, monospace; font-size: 12px; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <h1>proof edit pipeline tests</h1>
+  <p>Zero-dependency golden-pixel and invariant tests for <code>frontend/src/pipeline/</code>. Open this page from any static server (for example
+    <code>./run.sh</code> serving <code>frontend/</code>, then <code>/test/pipeline.html</code>).</p>
+  <div id="summary">Running…</div>
+  <table id="results"></table>
+  <script type="module" src="pipeline-tests.js"></script>
+</body>
+</html>

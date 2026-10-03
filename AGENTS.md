@@ -76,12 +76,26 @@ This is the human's standing direction from `larder`: filtering, formatting, and
   - darktable's pipeline is scene-referred linear with a Rec.2020 working space, while proof's is linear sRGB/Rec.709 from JPEG input. Any colour-space matrix or primaries-dependent constant has to be converted, not copied.
   - Snapseed sets the UX (which sliders exist, and their −100…+100 ranges). darktable sets the math.
 
-Each tool is a small file in `src/pipeline/ops/` that exports:
-  - a stable tool `id` (it's written into recipes, so never rename it);
-  - its parameter schema, with a default (identity) value for each parameter;
-  - its GLSL fragment source (or, for geometry tools, its UV transform);
-  - a function that binds the tool's uniforms from a params object.
-- **An op is a pure function of (input texture, params) → output texture.** No hidden state, no reading the DOM, no reaching into other ops. The stack runner owns the GL context and framebuffers and alternates passes between the two framebuffers. Ops never allocate GL resources themselves. A multi-pass op, such as local contrast or shadows/highlights with a blurred mask, declares its internal passes and asks the runner for scratch textures, including reduced-resolution ones.
+- **The pieces.** These live in `src/pipeline/`:
+  - `gl.js` holds the context, textures, and programs.
+  - `runner.js` holds `Pipeline` (source, render, readback) and `PassContext`, which is all an op ever sees.
+  - `color.js` holds the colour science, both the JS side and the GLSL library prepended to every shader.
+  - `curve.js` holds the curve interpolation.
+  - `recipe.js` holds the recipe schema and migrations.
+  - `ops/*.js` holds one tool per file, registered in `ops/index.js`.
+- **A tool exports** `{ id, label, params, isIdentity(params), apply(ctx, input, params) }`:
+  - `id` is written into recipes, so it never changes.
+  - `params` is the schema: `{ id, label, min, max, default }` for sliders (the identity is 0), or `kind: "curves"`.
+  - `isIdentity` lets the runner skip the tool exactly, which keeps an untouched photo bit-identical.
+  - `apply` returns the output texture.
+- **An op is a pure function of (input texture, params) → output texture.** No hidden state, no reading the DOM, no reaching into other ops. The runner owns the GL context, every texture, and every program. An op uses only `PassContext`:
+  - `pass(glsl, { inputs, uniforms, target })`;
+  - `target(w, h)` and `release(...)` for pooled scratch textures;
+  - the `downsample`, `gaussian`, and `box` helpers;
+  - `lut(key, ...)` for cached data textures.
+
+  An op **never releases its input**. It releases every scratch texture it doesn't return, and the pipeline tests check that the pool stops growing.
+- **Slider response.** Sliders store slider units in the recipe (−100…100, or 0…100). An op converts them with `shape()` (`ops/shared.js`, |v|^1.5) before mapping to darktable's parameter ranges, so the response is gentle near zero.
 - **Spatial parameters are resolution-independent.** Blur radii and similar values are expressed relative to the image's long edge, so editing on the preview-sized source gives the same look as the full-resolution render on save.
 - **Default parameters must be an exact identity.** A tool added at its defaults must not change any pixel beyond float rounding. `frontend/test/pipeline.html` asserts this for every op.
 - **The preview path and the export path run the same ops.** The only difference is the render target size. Never add a "preview-only approximation" of a tool, because what you see must be what gets saved.
@@ -117,7 +131,13 @@ Environment variables only, `PROOF_`-prefixed (`PROOF_DATA`, `PROOF_PORT`, `PROO
 ## Testing
 
 - **Backend:** no test framework dependency. Tests are plain top-level `test<Something>()` functions under `backend/test/`, discovered by a hand-rolled `TestMain.kt` and asserted with `kotlin.test.*` from the `kotlinc` distribution. `backend/test.sh` compiles and runs them, as in `shelf`. The EXIF reader, the EXIF splice, and XMP read/write get real-camera fixture files, small and committed as test data, covering all 8 EXIF orientations.
-- **Frontend pipeline:** `frontend/test/pipeline.html` is a zero-dependency test page. It renders small synthetic inputs through each op, asserts golden pixel values within a tolerance, and asserts identity at defaults. Open it in a browser and read the result. CI may run it under apt-installed headless Chromium, but never through npm.
+- **Frontend pipeline:** `frontend/test/pipeline.html` (with `pipeline-tests.js`) is a zero-dependency test page. It checks each tool in four ways:
+  - its identity at defaults, both skipped and forced to run;
+  - finiteness at every slider extreme;
+  - CPU references for the tone curves;
+  - the property it promises (monotone, neutral stays neutral, preview matches export, and so on).
+
+  Serve `frontend/` and open `/test/pipeline.html`. `backend/run.sh` serves it, as does any static server. Results also land in `window.__pipelineTests` for headless runs. CI may run it under apt-installed headless Chromium, but never through npm.
 
 ## Dependency policy
 

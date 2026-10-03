@@ -233,3 +233,39 @@ Missing thumbnails and previews already regenerate on demand, so the derived cac
 - **Culling doesn't reflow the sheet.** Rejecting a photo while viewing "Picks" doesn't remove it until the view is reloaded, matching Lightroom and Photo Mechanic. That way the selection doesn't jump while culling quickly.
 - **No re-render flicker.** Each photo has its own reactive state, and frames read their static fields through VanJS `rawVal`, so a cull keypress re-renders a few badge nodes instead of re-creating every `<img>`.
 - **Without Phase 6, an existing sidecar's rating isn't shown until proof writes to it.** A darktable rating of 1 shows as unrated in the grid. The first proof change to that photo reads the sidecar as its base, so nothing is lost, and the index then matches.
+
+## 2026-10-02 — Phase 8: the edit pipeline core, ported from darktable
+
+**Engine.** The verbatim mini-gl seed was split into `gl.js` (context, textures, programs) and `runner.js` (a stack runner with a texture pool), using `git mv` so history shows the derivation:
+- **Half-float required:** intermediates are RGBA16F, with no 8-bit fallback.
+- **Pooled resources:** ops get a `PassContext` and never allocate GL resources.
+- **One output pass** feeds both the screen and the readback, so what's shown is what Phase 11 will save. It clamps NaN and out-of-range values and encodes sRGB.
+- **Dither:** the output pass adds a deterministic dither under half a code value. It breaks up 16-to-8-bit banding but can't move an exactly representable value, so an untouched photo stays bit-identical (tested).
+
+**darktable is the source for the filters.** Code was read at pinned commit `3fc4cfb2`, and every port keeps darktable's GPL notice:
+
+| proof tool | darktable source | proof's deliberate differences (display-referred JPEG input, 0..1, vs darktable's unbounded scene-linear) |
+|---|---|---|
+| Brightness | colorbalancergb luminance power, `Y^(1/(1+p))` in Filmlight Yrg | white fulcrum = sRGB white |
+| Contrast | colorbalancergb grey-fulcrum power (fulcrum 0.1845) | mirrored above the fulcrum, so 0→0 and 1→1 (darktable's pushes white past 1) |
+| Saturation | colorbalancergb chroma in Ych, plus the Yrg gamut check | none |
+| Ambiance | (none in darktable; Snapseed's isn't published) | proof's own: colorbalancergb vibrance plus a gentle shadow lift and highlight compression through shadhi |
+| Shadows / Highlights | shadhi (Gaussian mode): blurred inverted L mask and the `overlay()` blend, ported from the OpenCL kernel | bounded mode (L clamped); shadows colour correction 50 % instead of 100 % (see below); mask sigma = 2.5 % of the long edge |
+| Warmth, White Balance | CAT16 matrices from colorspace.h; illuminant from the CIE daylight locus (CIE 15) | relative to D65, so zero is exactly the identity; ±80 mired, ±0.02 duv |
+| Curves | curve_tools.c monotone Hermite (no overshoot), flat beyond the end points | applied per channel in sRGB-encoded space (how curve editors are read); master then channel, baked into one LUT |
+| Sharpening | sharpen.c: unsharp mask on Lab L, sigma = radius/2.5, soft threshold 0.5 | radius 0.06 % of the long edge (darktable scales its 2 px by the pipe scale too) |
+| Structure | (darktable's bilat.c uses a local Laplacian pyramid: too many passes for interactive WebGL, especially on phones) | proof's own: a fast guided filter on Lab L (He et al.), the edge-aware primitive darktable's tone equalizer uses. It doesn't halo at strong edges (tested). |
+
+**Colour-space notes.**
+- **Working space:** proof works in linear sRGB (Rec.709), not darktable's Rec.2020. Every port goes through XYZ D65.
+- **White point:** recomputed for proof's matrices. Its rg (0.21904, 0.54368) matches darktable's own (0.21902, 0.54371), which validates the port. The Kirk/CIE 2006 luminance of sRGB white is 1.058, not 1, so tone curves work on Y/1.058 and white maps exactly to white.
+
+**Slider response.** Recipes store slider units (−100…100). Every slider is shaped by |v|^1.5 before mapping to darktable's ranges. The Phase 1 spike found linear sliders too sensitive near zero, and recipes stay meaningful if the maths changes.
+
+**Found while testing on a smooth synthetic gradient and fixed.**
+- **Structure amplified the source JPEG's 1-level quantisation steps into stripes.** It now only amplifies detail above a noise floor (about 0.3 to 1.2 L*), and only where the neighbourhood is genuinely textured (local standard deviation about 0.6 to 2 L*, from the guided filter's own means). Measured on a dark gradient, rows with visible jumps went 51 → 8 (the original has 7).
+- **Shadows colour correction at darktable's 100 %** scales chroma with the lightness ratio, so lifting near-black pixels multiplied the JPEG's colour noise into brown bands. proof uses 50 %, darktable's own highlights default, and the band is gone.
+
+**Known limitation.** Lifting shadows hard on an 8-bit JPEG stretches its quantisation steps, and structure applied after a strong lift can still emphasise them a little. That's inherent to 8-bit sources, and Snapseed shows the same thing on skies. Real photos' sensor noise hides most of it. Debanding on decode is a possible later addition.
+
+**Editor without saving.** Phase 8's editor works on the 2048 px preview and keeps the recipe in memory only. Saving the render and recipe is Phase 11. Until then, closing with edits asks for confirmation.
