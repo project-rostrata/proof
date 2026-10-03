@@ -25,6 +25,7 @@ data class FileStream(
     val fileName: String,
     val contentLength: Long,
     val asAttachment: Boolean = true,
+    val headers: Map<String, String> = emptyMap(), // proof addition: e.g. Cache-Control for renditions
     val write: (OutputStream) -> Unit,
 ) : StreamResult()
 data class StreamFailed(val err: Err) : StreamResult()
@@ -82,6 +83,10 @@ class Router {
 
     fun post(pattern: String, handler: Handler) {
         routes += Route("POST", parsePattern(pattern), RouteHandler.Json(handler))
+    }
+
+    fun patch(pattern: String, handler: Handler) {
+        routes += Route("PATCH", parsePattern(pattern), RouteHandler.Json(handler))
     }
 
     fun delete(pattern: String, handler: Handler) {
@@ -187,6 +192,7 @@ class Router {
             is StreamFailed -> respondJson(exchange, result.err)
             is FileStream -> {
                 exchange.responseHeaders.add("Content-Type", result.contentType)
+                result.headers.forEach { (name, value) -> exchange.responseHeaders.add(name, value) }
                 if (result.asAttachment) {
                     val encodedName = URLEncoder.encode(result.fileName, "UTF-8").replace("+", "%20")
                     exchange.responseHeaders.add("Content-Disposition", "attachment; filename*=UTF-8''$encodedName")

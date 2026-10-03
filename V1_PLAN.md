@@ -83,12 +83,18 @@ Reuse `shelf`'s pattern directly rather than redesigning it.
 - **Moved to Phase 5:** the `projects` and `photos` tables. Each table lands with the code that first writes it, so the EXIF columns are settled together with the EXIF reader rather than guessed now.
 - Verified: 46 DB-free tests, plus a smoke test of the full register → me → logout → login flow against a real `postgres:18.6-alpine`.
 
-## Phase 5 — Projects + batch upload + ingest
+## Phase 5 — Projects + batch upload + ingest — DONE
+
+All built as listed, with two differences:
+- **No real-camera fixtures.** The EXIF tests use a test-side TIFF writer covering both byte orders and all 8 orientations instead of committed camera files. Orientation is checked against an independent pixel-loop reference built from the EXIF spec table. Real Olympus and Pixel files were exercised by hand in the Phase 1 spike.
+- **The frontend's first real views landed here:** sign-in/register, the project list (create, rename, delete), and the project page (upload queue plus contact-sheet grid).
+
+Verified with 78 tests, an API smoke test against Postgres 18.6, and a headless-Chrome run of the real UI, including an upload through the file picker. See `docs/decisions.md` for the bug the smoke test caught.
 
 - Migrations for the `projects` and `photos` tables (brief §7), moved here from Phase 4.
 - Project CRUD. The project name becomes a directory name, so it goes through the path-safety module (`fs/PathSafety.kt`, already in place since Phase 3).
 - `POST /api/projects/{id}/photos`: one file per request, streamed to disk, with JPEG/PNG checked by magic bytes (not by extension or `Content-Type`), within the size cap.
-- An EXIF reader (hand-written TIFF IFD parser) for orientation, capture time, and camera/lens/exposure, unit-tested against a small set of real-camera fixture JPEGs that cover all 8 orientations.
+- An EXIF reader (hand-written TIFF IFD parser) for orientation, capture time, and camera/lens/exposure, unit-tested on synthetic TIFFs in both byte orders covering all 8 orientations.
 - Thumbnail (about 400 px) and preview (about 2048 px) generation with ImageIO/`Graphics2D`, using a multi-step downscale and with orientation applied, cached under `.cache/`.
 - Frontend: a drag-and-drop or file-picker batch upload with a queue of about 3 concurrent uploads and progress per file.
 

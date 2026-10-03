@@ -56,7 +56,7 @@ App server (Kotlin, JDK stdlib HTTP, REST/JSON API)
   Filesystem (truth)       Postgres (index — rebuildable)
   $PROOF_DATA/<user>/<project>/
     originals/IMG_0001.jpg            never modified
-    originals/IMG_0001.jpg.xmp        rating / pick-reject / label
+    originals/IMG_0001.jpg.xmp        rating / pick-reject / label (darktable-style naming)
     edits/IMG_0001.jpg                latest browser render
     edits/IMG_0001.recipe.json        opaque, versioned edit stack
   $PROOF_DATA/.cache/                 thumbnails + previews — derived, deletable
@@ -116,8 +116,8 @@ HEIC (iPhone) and camera RAW are deferred to v1.5. Both need a decoder the JDK d
 - **v1 input formats.** Decided: JPEG and PNG only.
 - **Auth.** Decided: **`shelf`-style accounts**, meaning username/password, PBKDF2, cookie sessions, and a per-user data directory under `$PROOF_DATA/<username>/`. Personal photos are private data in a way that `press`'s print jobs aren't. Built in Phase 4.
 - **Target browsers and devices.** Decided: current **Firefox and Chromium-based browsers on desktop and Android**. Safari, iOS, and iPadOS are out of scope for v1. The Phase 1 spike passed on Firefox for Linux desktop, Firefox for Android (Pixel 7a), and headless Chrome. Phones are supported but aren't the primary target, so the edit UI is designed for desktop first. Snapseed-style touch-first controls such as swipe-to-adjust aren't a v1 requirement.
-- **XMP sidecar naming.** Open. `IMG_0001.jpg.xmp` (darktable-style) or `IMG_0001.xmp` (Lightroom-style; the two collide if `IMG_0001.jpg` and `IMG_0001.png` are both in a project). The proposal is darktable-style.
-- **Max upload size per file.** Open. The proposed default is 100 MB, set by an env var.
+- **XMP sidecar naming.** Decided: **`IMG_0001.jpg.xmp`** (darktable-style). It can't collide when `IMG_0001.jpg` and `IMG_0001.png` share a project, and darktable reads it directly. Built in Phase 7.
+- **Max upload size per file.** Decided: **100 MB**, set by `PROOF_MAX_UPLOAD_BYTES` (default `100000000`). It is enforced both from `Content-Length` and while streaming.
 - **Export options.** Open. The proposal is: download the picks (rendered if edited, original otherwise) as a ZIP. JPEG quality is fixed at the browser's encode setting (about 0.92). No resize-on-export in v1.
 - **Purging rejects.** Open. Can rejected originals be deleted from disk from inside the app, or does proof never delete an original? The proposal is an explicit, confirmed per-project "delete rejects" action, with hard deletion as in `shelf` v1.
 - **v1 edit tool list.** Open, needs sign-off. The proposal is in section 6.

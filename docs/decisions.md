@@ -193,3 +193,16 @@ This resolves brief §5. The human chose **`shelf`-style accounts** over no-auth
   - restart: no migration re-applied, and the account still logs in.
 
   The automated suite deliberately stays DB-free, as in shelf. The HTTP tests use a fake connection that fails on any access, which also proves the 401 and validation paths answer without a query.
+
+## 2026-10-02 — Phase 5: projects, upload, ingest
+
+- **Max upload is 100 MB** (`PROOF_MAX_UPLOAD_BYTES`), and **XMP sidecars are named `IMG_0001.jpg.xmp`** (darktable-style). The human decided both. This resolves those two brief §5 items.
+- **ImageIO already colour-manages JPEGs.** A probe confirmed that a JPEG with an embedded ICC profile (linear RGB in the test) decodes to correctly converted sRGB: 0x80 linear became 0xBC. So P3 phone photos thumbnail with correct colour and no extra code. PNG `iCCP` handling wasn't checked, and PNGs are rare as camera output.
+- **Re-uploading the identical file is idempotent.** The same filename with the same SHA-256 returns the existing photo with a 200, so a retried batch doesn't fail on files that already made it. The same name with different content is a 409. proof never silently overwrites an original.
+- **Renditions are generated eagerly in the background and lazily on request.** After an upload, a 2-thread pool pre-generates the thumbnail and preview. A request for a missing one generates it inline. Both paths share one generation per photo, and a 2-slot semaphore bounds concurrent full decodes, at roughly 100+ MB of heap each for 24 MP. Rendition URLs carry the file's mtime as `?v=` and are served `immutable`.
+- **Decode with subsampling, orient after scaling.** ImageIO source subsampling keeps at least 2x the 2048 px preview, which cuts decode heap and time for large files. Orientation is applied to the downscaled image, so a 2048 px image is rotated instead of a 24 MP one.
+- **Capture time is stored as `TIMESTAMP` (no zone).** EXIF `DateTimeOriginal` is the camera's wall clock. `OffsetTimeOriginal` is kept in a separate column when present, rather than guessing a zone.
+- **Project and photo names are portable path segments.** That means no `/ \\ : * ? " < > |` or control characters, no leading dot, no leading or trailing whitespace, and no trailing dot, so the tree stays usable over SMB/Windows. On top of that, they still go through `resolveUnderRoot`.
+- **Bug caught by the smoke test, now fixed: renaming onto an empty project's name destroyed it.** `Files.move(..., ATOMIC_MOVE)` is `rename(2)` on Linux, which silently *replaces* an empty target directory. Renaming project A to the name of an existing, empty project B replaced B's directory with A's. The database update then failed with a unique violation, so the rollback moved A back, leaving B as a row with no directory. `fs/renameDirectory` now refuses whenever the target exists, and there's a regression test for it. A tiny race remains between the existence check and the move, and is accepted for a single-user-at-a-time app.
+- **The upload queue shows per-file errors inline instead of a toast per failure.** A bad batch would otherwise stack dozens of toasts.
+- **The project list loads before it's shown,** so going back from a project never flashes stale photo counts. That was found in the headless-Chrome run.

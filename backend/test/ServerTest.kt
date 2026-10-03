@@ -1,8 +1,7 @@
 import proof.auth.AuthConfig
 import proof.db.ConnectionPool
 import proof.db.Database
-import proof.db.SessionRepository
-import proof.db.UserRepository
+import proof.image.Renditions
 import java.lang.reflect.Proxy
 import java.net.URI
 import java.net.http.HttpClient
@@ -29,9 +28,11 @@ private fun withServer(block: (base: String, client: HttpClient) -> Unit) {
     val router = buildRouter(
         frontendDir = frontend,
         dataRoot = frontend.resolve("data"),
-        users = UserRepository(noDatabase),
-        sessions = SessionRepository(noDatabase),
+        database = noDatabase,
+        renditions = Renditions(frontend.resolve("cache"), 1),
+        renditionExecutor = daemonPool("test-renditions", 1),
         authConfig = AuthConfig(sessionDurationHours = 1, secureCookies = false),
+        maxUploadBytes = 1_000_000,
     )
     val server = createServer(0, router)
     server.start()
@@ -98,4 +99,11 @@ fun testRegisterRejectsLeadingDotUsernameBeforeTouchingTheDatabase() = withServe
     val response = client.send(request, HttpResponse.BodyHandlers.ofString())
 
     assertEquals(400, response.statusCode())
+}
+
+// Every project and photo route sits behind requireAuth: no session, no database access, 401.
+fun testProjectAndPhotoRoutesRequireASession() = withServer { base, client ->
+    for (path in listOf("/api/projects", "/api/projects/00000000-0000-0000-0000-000000000000/photos", "/api/photos/00000000-0000-0000-0000-000000000000/thumb")) {
+        assertEquals(401, client.get("$base$path").statusCode(), path)
+    }
 }

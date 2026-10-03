@@ -2,20 +2,30 @@ import com.sun.net.httpserver.HttpServer
 import proof.api.LoginHandler
 import proof.api.LogoutHandler
 import proof.api.MeHandler
+import proof.api.PhotosHandler
+import proof.api.ProjectsHandler
 import proof.api.RegisterHandler
 import proof.api.Router
 import proof.api.StaticFileHandler
 import proof.api.healthHandler
 import proof.api.requireAuth
+import proof.api.requireAuthStream
 import proof.auth.AuthConfig
 import proof.db.ConnectionPool
 import proof.db.Database
 import proof.db.MigrationRunner
+import proof.db.PhotoRepository
+import proof.db.ProjectRepository
 import proof.db.SessionRepository
 import proof.db.UserRepository
+import proof.fs.cacheRoot
+import proof.fs.tmpRoot
+import proof.image.Rendition
+import proof.image.Renditions
 import java.net.InetSocketAddress
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.logging.Logger
@@ -23,6 +33,10 @@ import java.util.logging.Logger
 private val logger = Logger.getLogger("proof")
 
 private const val HTTP_THREADS = 8
+
+// Concurrent full-resolution decodes for thumbnails/previews. Each needs ~100+ MB of heap for a
+// 24 MP photo (AGENTS.md "Concurrency").
+private const val DECODE_SLOTS = 2
 
 private fun env(name: String): String = System.getenv(name) ?: error("$name is required")
 
@@ -39,8 +53,10 @@ fun main() {
     )
     // The default covers the HTTP pool plus headroom for the background work later phases add.
     val dbPoolSize = (System.getenv("PROOF_DB_POOL_SIZE") ?: "10").toInt()
+    val maxUploadBytes = (System.getenv("PROOF_MAX_UPLOAD_BYTES") ?: "100000000").toLong()
 
     Files.createDirectories(dataRoot)
+    clearTmp(tmpRoot(dataRoot))
     val pool = ConnectionPool.open(env("PROOF_DB_URL"), env("PROOF_DB_USER"), env("PROOF_DB_PASSWORD"), dbPoolSize)
     pool.use { connection -> MigrationRunner(connection, migrationsDir).run() }
     val database = Database(pool)
@@ -48,9 +64,11 @@ fun main() {
     val router = buildRouter(
         frontendDir = frontendDir,
         dataRoot = dataRoot,
-        users = UserRepository(database),
-        sessions = SessionRepository(database),
+        database = database,
+        renditions = Renditions(cacheRoot(dataRoot), DECODE_SLOTS),
+        renditionExecutor = daemonPool("proof-renditions", DECODE_SLOTS),
         authConfig = authConfig,
+        maxUploadBytes = maxUploadBytes,
     )
     val server = createServer(port, router)
     server.start()
@@ -62,11 +80,20 @@ fun main() {
 fun buildRouter(
     frontendDir: Path,
     dataRoot: Path,
-    users: UserRepository,
-    sessions: SessionRepository,
+    database: Database,
+    renditions: Renditions,
+    renditionExecutor: ExecutorService,
     authConfig: AuthConfig,
+    maxUploadBytes: Long,
 ): Router {
+    val users = UserRepository(database)
+    val sessions = SessionRepository(database)
+    val projects = ProjectRepository(database)
+    val photos = PhotoRepository(database)
+
     val staticFileHandler = StaticFileHandler(frontendDir)
+    val projectsHandler = ProjectsHandler(projects, photos, renditions, dataRoot)
+    val photosHandler = PhotosHandler(projects, photos, renditions, renditionExecutor, dataRoot, maxUploadBytes)
     val registerHandler = RegisterHandler(users, sessions, dataRoot, authConfig)
     val loginHandler = LoginHandler(users, sessions, authConfig)
     val logoutHandler = LogoutHandler(sessions, authConfig.secureCookies)
@@ -78,6 +105,15 @@ fun buildRouter(
     router.post("/api/login", loginHandler::handle)
     router.post("/api/logout", logoutHandler::handle)
     router.get("/api/me", requireAuth(sessions, users, meHandler::handle))
+    router.get("/api/projects", requireAuth(sessions, users, projectsHandler::list))
+    router.post("/api/projects", requireAuth(sessions, users, projectsHandler::create))
+    router.patch("/api/projects/:projectId", requireAuth(sessions, users, projectsHandler::rename))
+    router.delete("/api/projects/:projectId", requireAuth(sessions, users, projectsHandler::delete))
+    router.get("/api/projects/:projectId/photos", requireAuth(sessions, users, photosHandler::list))
+    router.post("/api/projects/:projectId/photos", requireAuth(sessions, users, photosHandler::upload))
+    router.getStream("/api/photos/:photoId/thumb", requireAuthStream(sessions, users, photosHandler.rendition(Rendition.THUMB)))
+    router.getStream("/api/photos/:photoId/preview", requireAuthStream(sessions, users, photosHandler.rendition(Rendition.PREVIEW)))
+    router.getStream("/api/photos/:photoId/original", requireAuthStream(sessions, users, photosHandler::original))
     router.serveStatic(staticFileHandler::serve)
     return router
 }
@@ -88,10 +124,20 @@ fun buildRouter(
 // threads would outlive a stopped server (e.g. hang the test runner after the HTTP tests).
 fun createServer(port: Int, router: Router): HttpServer {
     val server = HttpServer.create(InetSocketAddress(port), 0)
-    val threadIds = AtomicInteger()
-    server.executor = Executors.newFixedThreadPool(HTTP_THREADS) { task ->
-        Thread(task, "proof-http-${threadIds.incrementAndGet()}").apply { isDaemon = true }
-    }
+    server.executor = daemonPool("proof-http", HTTP_THREADS)
     server.createContext("/", router.toHttpHandler())
     return server
+}
+
+fun daemonPool(name: String, threads: Int): ExecutorService {
+    val threadIds = AtomicInteger()
+    return Executors.newFixedThreadPool(threads) { task ->
+        Thread(task, "$name-${threadIds.incrementAndGet()}").apply { isDaemon = true }
+    }
+}
+
+// Leftovers from uploads interrupted by a crash or restart. Nothing references them.
+private fun clearTmp(dir: Path) {
+    if (!Files.exists(dir)) return
+    Files.list(dir).use { files -> files.forEach(Files::deleteIfExists) }
 }

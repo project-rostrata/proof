@@ -12,6 +12,13 @@ private val testClasses = listOf(
     Class.forName("CookiesTestKt"),
     Class.forName("ConnectionPoolTestKt"),
     Class.forName("UserRootTestKt"),
+    Class.forName("ExifReaderTestKt"),
+    Class.forName("OrientationTestKt"),
+    Class.forName("ImageTypeTestKt"),
+    Class.forName("RenditionsTestKt"),
+    Class.forName("ProjectPathsTestKt"),
+    Class.forName("UploadReceiverTestKt"),
+    Class.forName("DisplayTestKt"),
 )
 
 fun main() {

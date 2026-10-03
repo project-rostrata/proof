@@ -44,6 +44,14 @@ The backend skeleton is done (see `architecture.md`). `run.sh` serves `/api/heal
 
 Accounts are done. The human chose `shelf`-style auth. Register, login, logout, and me work against real Postgres 18.6 (smoke-tested), with 46 DB-free tests passing. The `projects`/`photos` tables moved to Phase 5. See `decisions.md` and `architecture.md`. To run locally, see the Postgres one-liner in `CONTRIBUTING.md`.
 
+## Phase 5 status (2026-10-02)
+
+Projects, upload, and ingest are done:
+- **Backend:** EXIF, upright thumbnails and previews, and server-built display strings.
+- **Frontend:** the first real UI, meaning sign-in, the project list, and the project page with its upload queue and contact sheet.
+
+78 tests pass. It was smoke-tested end to end against Postgres 18.6 and in headless Chrome, including an upload through the real file picker. The smoke test caught a data-loss bug (renaming onto an empty project's name), which is now fixed with a regression test. See `decisions.md`.
+
 ## Next step
 
-Phase 5: the `projects`/`photos` migrations, project CRUD, batch upload, the hand-written EXIF reader, thumbnails and previews, and the first real frontend views (login, project list, upload queue). Still-open brief §5 items that Phase 5 touches are the **max upload size** (proposed 100 MB) and **XMP naming** (that one is needed by Phase 7). Confirm both with the human. The spike was committed in `b71f680` and removed in the next commit. Use `git show b71f680 -- spike/` to see it, including the pinned upstream mini-gl files that Phase 2 copies the kept pieces from.
+Phase 6: reconciliation, meaning picking up projects and photos added or changed on disk outside the app. Port it from `shelf`'s scanner. `.cache/` and `.tmp/` under `$PROOF_DATA` must be skipped, and so must any leading-dot entry. The spike was committed in `b71f680` and removed in the next commit. Use `git show b71f680 -- spike/` to see it, including the pinned upstream mini-gl files that Phase 2 copies the kept pieces from.
