@@ -17,17 +17,14 @@ import javax.xml.transform.TransformerFactory
 import javax.xml.transform.dom.DOMSource
 import javax.xml.transform.stream.StreamResult
 
-// Cull state as proof models it (PROJECT_BRIEF.md §4): 0-5 stars, a pick/reject flag, and an
-// optional colour label. The XMP sidecar next to the original is the truth.
-data class CullState(val rating: Int = 0, val flag: String = FLAG_NONE, val label: String? = null)
+// Cull state as proof models it (PROJECT_BRIEF.md §4): 0-5 stars and a pick/reject flag. The XMP
+// sidecar next to the original is the truth.
+data class CullState(val rating: Int = 0, val flag: String = FLAG_NONE)
 
 const val FLAG_NONE = "none"
 const val FLAG_PICK = "pick"
 const val FLAG_REJECT = "reject"
 val FLAGS = setOf(FLAG_NONE, FLAG_PICK, FLAG_REJECT)
-
-// Lightroom's colour label names, which other tools also read from xmp:Label.
-val LABELS = listOf("Red", "Yellow", "Green", "Blue", "Purple")
 
 private const val RDF_NS = "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
 private const val X_NS = "adobe:ns:meta/"
@@ -56,9 +53,9 @@ private object QuietErrors : ErrorHandler {
 //
 // Mapping, chosen so other tools see the right thing:
 //   xmp:Rating   stars 0-5, or -1 when rejected. -1 is the de facto reject value in Lightroom and darktable.
-//   xmp:Label    colour label ("Red", ...), the field Lightroom uses.
 //   proof:Flag   none | pick | reject. Standard XMP has no "pick".
 //   proof:Rating the stars, kept even while rejected, so un-rejecting restores them.
+// proof has no colour labels, so an xmp:Label set by Lightroom or darktable is left as it is.
 object Xmp {
     fun sidecarFor(original: Path): Path = original.resolveSibling("${original.fileName}.xmp")
 
@@ -68,11 +65,10 @@ object Xmp {
         val proofFlag = property(description, PROOF_NS, "Flag")?.takeIf { it in FLAGS }
         val proofRating = property(description, PROOF_NS, "Rating")?.toIntOrNull()?.takeIf { it in 0..5 }
         val xmpRating = property(description, XMP_NS, "Rating")?.toIntOrNull()
-        val label = property(description, XMP_NS, "Label")?.takeIf { it in LABELS }
         // Without proof's fields (a sidecar from another tool), fall back to the standard ones.
         val flag = proofFlag ?: if (xmpRating == -1) FLAG_REJECT else FLAG_NONE
         val rating = proofRating ?: xmpRating?.takeIf { it in 0..5 } ?: 0
-        return CullState(rating, flag, label)
+        return CullState(rating, flag)
     }
 
     fun write(sidecar: Path, state: CullState) {
@@ -80,7 +76,6 @@ object Xmp {
         val document = if (existing) parse(Files.readAllBytes(sidecar)) else newDocument()
         val description = findDescription(document) ?: addDescription(document)
         setProperty(description, XMP_NS, "xmp", "Rating", (if (state.flag == FLAG_REJECT) -1 else state.rating).toString())
-        setProperty(description, XMP_NS, "xmp", "Label", state.label)
         setProperty(description, PROOF_NS, "proof", "Flag", state.flag)
         setProperty(description, PROOF_NS, "proof", "Rating", state.rating.toString())
         // Only a sidecar proof creates is indented. Re-indenting an existing one stacks new

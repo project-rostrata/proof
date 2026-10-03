@@ -391,3 +391,20 @@ Checked with emulated touch at phone size in headless Chrome:
 - a tap above the photo closes the loupe.
 
 The desktop arrow keys and buttons are unchanged.
+
+## 2026-10-03 — No colour labels: stars and pick/reject only
+
+Colour labels came in at Phase 7 as a Lightroom convention: keys 6–9, `xmp:Label`, a dot on each frame, and a row of dots in the loupe. proof never let you filter or sort by them, so inside proof they did nothing. In the loupe they were five unexplained dots. The human's call: take them out, because the ethos is only what's necessary. Culling is stars plus pick/reject.
+
+**Removed:**
+- the keys, the grid dots, and the loupe controls;
+- `label` from the API (a `label` in a PATCH body is ignored, like any other unknown field);
+- the `photos.label` column, dropped by `0003_drop_photo_labels.sql` rather than by editing 0002, because existing installs have already run 0002.
+
+**Kept on purpose:** proof never reads or writes `xmp:Label`. A label Lightroom or darktable put in a sidecar survives proof's writes, which are merges, so proof doesn't destroy another tool's data (a new test covers this).
+
+**Checked:**
+- 102 backend tests pass;
+- a fresh database applies migrations 1–3, and the column is gone;
+- culling a photo whose sidecar holds darktable's `xmp:Label="Blue"` updates the rating and pick and keeps the label;
+- the loupe and grid have no label controls, and key 6 does nothing.

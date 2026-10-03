@@ -56,7 +56,7 @@ App server (Kotlin, JDK stdlib HTTP, REST/JSON API)
   Filesystem (truth)       Postgres (index — rebuildable)
   $PROOF_DATA/<user>/<project>/
     originals/IMG_0001.jpg            never modified
-    originals/IMG_0001.jpg.xmp        rating / pick-reject / label (darktable-style naming)
+    originals/IMG_0001.jpg.xmp        rating / pick-reject (darktable-style naming)
     edits/IMG_0001.jpg                latest browser render
     edits/IMG_0001.recipe.json        opaque, versioned edit stack
   $PROOF_DATA/.cache/                 thumbnails + previews — derived, deletable
@@ -90,7 +90,7 @@ The UI must not filter or format photo lists itself.
 - The cost is `shelf`'s reconciliation machinery (mtime scanning, a backstop scan, a path-safety layer). That is reused from `shelf` rather than redesigned.
 - Pure files with no DB (`press`'s model) was considered and rejected. Cull views need fast filter, sort, and count queries over hundreds of photos per project, and scanning sidecars on every request doesn't scale to that.
 
-**Ratings and flags live in XMP sidecars, the de facto standard.** Star rating (`xmp:Rating`, 0–5, with −1 meaning rejected, as in Lightroom and darktable), a pick flag, and an optional color label are written to a sidecar next to each original. This keeps cull work portable: another tool pointed at the project folder sees the same ratings. The exact sidecar naming convention is open (section 5).
+**Ratings and flags live in XMP sidecars, the de facto standard.** Star rating (`xmp:Rating`, 0–5, with −1 meaning rejected, as in Lightroom and darktable), and a pick flag are written to a sidecar next to each original. There are no colour labels: only what culling needs (`docs/decisions.md`, 2026-10-03), and a label another tool wrote is left untouched. This keeps cull work portable: another tool pointed at the project folder sees the same ratings. The exact sidecar naming convention is open (section 5).
 
 **JPEG and PNG only in v1, with no new dependency.** `javax.imageio` reads and writes both natively. Two pieces are hand-written instead of pulling in a metadata library:
 - **A small TIFF/EXIF reader**, a few hundred lines, for orientation, capture time, and camera/lens/exposure. **Orientation correctness is a hard requirement.** A sideways thumbnail in the cull grid is a correctness bug, not cosmetic.
@@ -168,7 +168,7 @@ Postgres is an index. Every column here can be rebuilt from the filesystem.
 - `photos`:
   - identity and file state: `id`, `project_id`, `filename`, `size_bytes`, `mtime`, `content_sha256`;
   - from EXIF: `width`, `height` (both oriented), `orientation`, `capture_time`, `camera`, `lens`, `exposure` (raw EXIF values, with display strings formatted at the API layer);
-  - from the XMP sidecar: `rating` (0–5), `flag` (`none`/`pick`/`reject`), `label`;
+  - from the XMP sidecar: `rating` (0–5), `flag` (`none`/`pick`/`reject`);
   - edit state: `has_edit`, `edit_mtime`, `recipe_version`.
 
 The recipe body is **not** stored in Postgres. It lives only in its `.recipe.json` file and is read from disk when requested.

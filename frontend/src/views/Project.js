@@ -3,7 +3,7 @@ import { state } from "../state.js";
 import { navigate, setFilter } from "../router.js";
 import { uploadFiles } from "../upload.js";
 import { KEY_HELP } from "../cull.js";
-import { Stars, FlagBadge, LabelDot } from "../components/CullBadges.js";
+import { Stars, FlagBadge } from "../components/CullBadges.js";
 import { Loupe } from "../components/Loupe.js";
 import { emptyNode } from "../vanHelpers.js";
 
@@ -75,7 +75,7 @@ function Frame(photoState, index) {
     div({ class: "frame-image" }, img({ src: () => photoState.val.thumbUrl, alt: photo.filename, loading: "lazy", decoding: "async" })),
     () => {
       const p = photoState.val;
-      return div({ class: "frame-cull" }, FlagBadge(p.flag), Stars(p.rating), LabelDot(p.label), p.hasEdit ? span({ class: "edited-badge", title: "Edited" }, "✎") : "");
+      return div({ class: "frame-cull" }, FlagBadge(p.flag), Stars(p.rating), p.hasEdit ? span({ class: "edited-badge", title: "Edited" }, "✎") : "");
     },
     figcaption(photo.filename),
   );

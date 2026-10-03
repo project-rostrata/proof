@@ -9,7 +9,7 @@ import java.util.UUID
 private const val PHOTO_COLUMNS = """
     ph.id, ph.project_id, ph.filename, ph.size_bytes, ph.mtime, ph.content_sha256, ph.width, ph.height,
     ph.orientation, ph.capture_time, ph.capture_offset, ph.camera_make, ph.camera_model, ph.lens,
-    ph.focal_length_mm, ph.f_number, ph.exposure_time_s, ph.iso, ph.rating, ph.flag, ph.label,
+    ph.focal_length_mm, ph.f_number, ph.exposure_time_s, ph.iso, ph.rating, ph.flag,
     ph.has_edit, ph.edit_mtime
 """
 
@@ -91,14 +91,13 @@ class PhotoRepository(private val database: Database) {
         return counts
     }
 
-    fun updateCull(id: UUID, rating: Int, flag: String, label: String?) {
+    fun updateCull(id: UUID, rating: Int, flag: String) {
         database.update(
-            "UPDATE photos SET rating = ?, flag = ?, label = ? WHERE id = ?",
+            "UPDATE photos SET rating = ?, flag = ? WHERE id = ?",
             bind = { stmt ->
                 stmt.setInt(1, rating)
                 stmt.setString(2, flag)
-                stmt.setString(3, label)
-                stmt.setObject(4, id)
+                stmt.setObject(3, id)
             },
         )
     }
@@ -156,7 +155,6 @@ class PhotoRepository(private val database: Database) {
         iso = rs.getInt("iso").takeUnless { rs.wasNull() },
         rating = rs.getInt("rating"),
         flag = rs.getString("flag"),
-        label = rs.getString("label"),
         hasEdit = rs.getBoolean("has_edit"),
         editMtime = rs.getTimestamp("edit_mtime")?.toInstant(),
     )

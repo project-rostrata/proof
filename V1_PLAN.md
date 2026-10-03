@@ -111,7 +111,7 @@ Reuse `shelf`'s scanner: mtime-based change detection between disk and the index
 ## Phase 7 — Cull — DONE
 
 Built as listed, plus:
-- **Colour labels:** keys 6–9.
+- **Colour labels:** keys 6–9. Removed again on 2026-10-03 (`docs/decisions.md`).
 - **Merged sidecars:** an existing sidecar, darktable's included, is merged into rather than overwritten.
 - **Filters in the URL:** the cull filter is mirrored in the URL.
 

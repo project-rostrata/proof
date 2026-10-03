@@ -2,10 +2,8 @@ import { state, showError } from "./state.js";
 import { api, ApiError } from "./api.js";
 
 // Culling keys, the Lightroom/Photo Mechanic conventions: 0-5 stars, P pick, X reject, U unflag,
-// 6-9 colour labels (toggle), arrows move, Enter/Space opens the loupe, Esc closes it.
-const LABEL_KEYS = { 6: "Red", 7: "Yellow", 8: "Green", 9: "Blue" };
-
-export const KEY_HELP = "0–5 rate · P pick · X reject · U unflag · 6–9 label · arrows move · Enter loupe · E edit · Esc close";
+// arrows move, Enter/Space opens the loupe, Esc closes it.
+export const KEY_HELP = "0–5 rate · P pick · X reject · U unflag · arrows move · Enter loupe · E edit · Esc close";
 
 // Optimistic: the frame updates the moment the key is pressed (it's echoing the user's own input),
 // then takes the server's version of the photo, plus the server's recounted view totals. On
@@ -46,12 +44,10 @@ export function handleKey(e) {
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
   const photoState = state.photos.val[state.selected.val];
-  const photo = photoState?.val;
   const loupe = state.loupeOpen.val;
   const key = e.key;
 
   if (key >= "0" && key <= "5") cull(photoState, { rating: Number(key) });
-  else if (LABEL_KEYS[key]) cull(photoState, { label: photo.label === LABEL_KEYS[key] ? null : LABEL_KEYS[key] });
   else if (key === "p" || key === "P") cull(photoState, { flag: "pick" });
   else if (key === "x" || key === "X") cull(photoState, { flag: "reject" });
   else if (key === "u" || key === "U") cull(photoState, { flag: "none" });

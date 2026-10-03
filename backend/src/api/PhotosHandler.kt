@@ -3,7 +3,6 @@ package proof.api
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
@@ -25,7 +24,6 @@ import proof.fs.userRoot
 import proof.image.CullState
 import proof.image.ExifReader
 import proof.image.FLAGS
-import proof.image.LABELS
 import proof.image.Rendition
 import proof.image.RenditionGroup
 import proof.image.Renditions
@@ -61,7 +59,6 @@ data class ApiPhoto(
     // Raw cull state: the UI needs these to show stars and flags and to know what a key toggles.
     val rating: Int,
     val flag: String,
-    val label: String?,
     // Edit state: the editor reopens from the recipe, and always works from the original.
     val hasEdit: Boolean,
     val editVersion: String,         // "none" or the saved edit's version: sent back as ?base= on save
@@ -99,7 +96,6 @@ fun PhotoRow.toApi(): ApiPhoto {
         dimensionsDisplay = dimensionsDisplay(width, height),
         rating = rating,
         flag = flag,
-        label = label,
         hasEdit = hasEdit,
         editVersion = editVersion(editMtime),
         sourcePreviewUrl = renditionUrl(id, "source", mtime),
@@ -147,8 +143,8 @@ class PhotosHandler(
         )
     }
 
-    // PATCH /api/photos/:photoId with any of {"rating": 0-5, "flag": "none|pick|reject",
-    // "label": "Red"|...|null}. The XMP sidecar is written first (it's the truth), then the index.
+    // PATCH /api/photos/:photoId with either or both of {"rating": 0-5, "flag": "none|pick|reject"}.
+    // The XMP sidecar is written first (it's the truth), then the index.
     // Returns the updated photo and fresh view counts, so the UI never recounts anything itself.
     fun cull(ctx: RouteContext, user: AuthenticatedUser): ApiResult<String> {
         val body = runCatching { Json.parseToJsonElement(ctx.readBody()).jsonObject }.getOrNull()
@@ -171,17 +167,12 @@ class PhotosHandler(
                 null -> current.flag
                 else -> (v as? JsonPrimitive)?.contentOrNull?.takeIf { it in FLAGS } ?: return Err(400, "INVALID_INPUT", "flag must be none, pick or reject")
             }
-            val label = when (val v = body["label"]) {
-                null -> current.label
-                is JsonNull -> null
-                else -> (v as? JsonPrimitive)?.contentOrNull?.takeIf { it in LABELS } ?: return Err(400, "INVALID_INPUT", "label must be one of ${LABELS.joinToString()} or null")
-            }
             try {
-                Xmp.write(sidecar, CullState(rating, flag, label))
+                Xmp.write(sidecar, CullState(rating, flag))
             } catch (e: SidecarUnreadable) {
                 return sidecarUnreadable(photo.filename)
             }
-            photos.updateCull(photo.id, rating, flag, label)
+            photos.updateCull(photo.id, rating, flag)
         }
         val updated = photos.findOwned(photo.id, user.id)?.photo ?: return Err(404, "NOT_FOUND", "No such photo")
         return Ok(Json.encodeToString(ApiCullResult(updated.toApi(), photos.viewCounts(photo.projectId).toApi())))

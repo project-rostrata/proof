@@ -209,12 +209,6 @@ label.btn-primary { position: relative; }
 .flag { display: inline-block; width: 14px; text-align: center; font-size: 12px; line-height: 1; }
 .flag-pick { color: var(--accent-on-surface); }
 .flag-reject { color: var(--danger); }
-.label-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; }
-.label-red { background: #D0584B; }
-.label-yellow { background: #D9B13B; }
-.label-green { background: #5FA35A; }
-.label-blue { background: #4F86C6; }
-.label-purple { background: #9467BD; }
 
 /* ---- cull: contact sheet selection and state ---- */
 
@@ -269,10 +263,6 @@ label.btn-primary { position: relative; }
   .cull-stars:hover .cull-star { color: rgba(255,255,255,.22); }
   .cull-stars .cull-star:hover, .cull-stars .cull-star:hover ~ .cull-star { color: var(--accent-on-surface); }
 }
-.cull-labels { display: inline-flex; gap: 4px; }
-.cull-label { width: 22px; height: 22px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; padding: 0; opacity: .45; }
-.cull-label:hover { opacity: .8; }
-.cull-label.is-on { opacity: 1; border-color: #EBEBEB; }
 .loupe-keys { color: #7A7A7A; font-size: 12px; white-space: nowrap; }
 @media (max-width: 1500px) { .loupe-keys { display: none; } }
 /* filename and EXIF take whatever width is left and truncate, so the bar stays one row */

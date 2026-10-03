@@ -25,7 +25,6 @@ data class PhotoRow(
     val iso: Int?,
     val rating: Int,
     val flag: String,
-    val label: String?,
     val hasEdit: Boolean,
     val editMtime: Instant?,
 )

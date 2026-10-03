@@ -30,8 +30,9 @@ in a plain `edits/` folder. PostgreSQL is only an index over those files.
   - EXIF is read on upload: capture time, camera, lens, and exposure. Orientation is applied
     everywhere.
 - **Cull on a contact sheet.**
-  - Keyboard-first: `0`–`5` stars, `P`/`X`/`U` pick, reject, unflag, `6`–`9` colour labels, arrows
-    to move, `Enter` for a full-screen loupe.
+  - Keyboard-first: `0`–`5` stars, `P`/`X`/`U` pick, reject, unflag, arrows
+    to move, `Enter` for a full-screen loupe. In the loupe, stars and Pick/Reject can also be
+    clicked or tapped, and on a phone you swipe between photos.
   - Views for All, Picks, Unrated, Rejects, and a minimum rating.
   - Ratings are saved to standard XMP sidecars that darktable and Lightroom can read. proof merges
     into an existing sidecar, so darktable's edit history is never overwritten.
@@ -60,7 +61,7 @@ Photos live on disk in their normal form, so they're easy to back up and to reac
 
 ```
 <data>/<user>/<project>/originals/IMG_0001.jpg      never modified
-<data>/<user>/<project>/originals/IMG_0001.jpg.xmp  rating, pick/reject, label
+<data>/<user>/<project>/originals/IMG_0001.jpg.xmp  rating, pick/reject
 <data>/<user>/<project>/edits/IMG_0001.jpg           your saved edit, full resolution
 <data>/<user>/<project>/edits/IMG_0001.jpg.recipe.json
 ```
