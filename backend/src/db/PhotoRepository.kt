@@ -68,13 +68,40 @@ class PhotoRepository(private val database: Database) {
             mapRow = { rs -> OwnedPhotoRow(toRow(rs), rs.getString("project_name")) },
         )
 
-    // Capture order, which is the natural order to cull in. Photos without EXIF go last, by name.
-    fun listForProject(projectId: UUID): List<PhotoRow> =
+    // One cull view of a project (PROJECT_BRIEF.md §6), filtered in SQL (the UI never filters), in
+    // capture order, which is the natural order to cull in. Photos without EXIF go last, by name.
+    fun listForProject(projectId: UUID, view: CullView, minRating: Int): List<PhotoRow> =
         database.queryList(
-            "SELECT $PHOTO_COLUMNS FROM photos ph WHERE ph.project_id = ? ORDER BY ph.capture_time NULLS LAST, ph.filename",
-            bind = { it.setObject(1, projectId) },
+            "SELECT $PHOTO_COLUMNS FROM photos ph WHERE ph.project_id = ? AND ${view.where} AND ph.rating >= ? " +
+                "ORDER BY ph.capture_time NULLS LAST, ph.filename",
+            bind = { stmt ->
+                stmt.setObject(1, projectId)
+                stmt.setInt(2, minRating)
+            },
             mapRow = ::toRow,
         )
+
+    fun viewCounts(projectId: UUID): Map<CullView, Int> {
+        val counts = database.queryOne(
+            "SELECT " + CullView.entries.joinToString(", ") { "count(*) FILTER (WHERE ${it.where}) AS ${it.name}" } +
+                " FROM photos ph WHERE ph.project_id = ?",
+            bind = { it.setObject(1, projectId) },
+            mapRow = { rs -> CullView.entries.associateWith { rs.getInt(it.name) } },
+        )
+        return counts
+    }
+
+    fun updateCull(id: UUID, rating: Int, flag: String, label: String?) {
+        database.update(
+            "UPDATE photos SET rating = ?, flag = ?, label = ? WHERE id = ?",
+            bind = { stmt ->
+                stmt.setInt(1, rating)
+                stmt.setString(2, flag)
+                stmt.setString(3, label)
+                stmt.setObject(4, id)
+            },
+        )
+    }
 
     fun idsForProject(projectId: UUID): List<UUID> =
         database.queryList(

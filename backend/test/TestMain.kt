@@ -19,6 +19,7 @@ private val testClasses = listOf(
     Class.forName("ProjectPathsTestKt"),
     Class.forName("UploadReceiverTestKt"),
     Class.forName("DisplayTestKt"),
+    Class.forName("XmpTestKt"),
 )
 
 fun main() {

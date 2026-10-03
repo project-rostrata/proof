@@ -2,6 +2,7 @@ import van from "./lib/van-1.6.1.js";
 import { state } from "./src/state.js";
 import { api } from "./src/api.js";
 import { initRouter } from "./src/router.js";
+import { handleKey } from "./src/cull.js";
 import { Toast } from "./src/components/Toast.js";
 import { TopBar } from "./src/components/TopBar.js";
 import { Auth } from "./src/views/Auth.js";
@@ -32,5 +33,6 @@ async function boot() {
   }
 }
 
+document.addEventListener("keydown", handleKey);
 van.add(document.getElementById("app"), Root());
 boot();

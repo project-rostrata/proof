@@ -1,33 +1,62 @@
-// The open project is reflected as ?project=<id> on the single / route, so the static file server
-// needs no SPA fallback (shelf's approach). Signed-in vs. signed-out isn't in the URL at all.
+// The open project and its cull filter live in the query string (?project=<id>&view=picks&minRating=3)
+// on the single / route, so the static file server needs no SPA fallback (shelf's approach), and a
+// reload or a shared link lands on the same view. Signed-in vs. signed-out isn't in the URL.
 import { state } from "./state.js";
 import { loadProjects, loadCurrentProject } from "./data.js";
 
-function projectFromUrl() {
-  return new URLSearchParams(window.location.search).get("project");
+function fromUrl() {
+  const q = new URLSearchParams(window.location.search);
+  return {
+    projectId: q.get("project"),
+    filter: { view: q.get("view") || "all", minRating: Number(q.get("minRating") || 0) },
+  };
+}
+
+function toUrl(projectId, filter) {
+  const q = new URLSearchParams();
+  if (projectId) {
+    q.set("project", projectId);
+    if (filter.view !== "all") q.set("view", filter.view);
+    if (filter.minRating) q.set("minRating", String(filter.minRating));
+  }
+  const query = q.toString();
+  return window.location.pathname + (query ? `?${query}` : "");
 }
 
 // The project list is fetched *before* switching to it, so it never flashes stale counts. A
 // project page switches first and shows "Loading…" until its photos arrive.
-async function show(projectId) {
+async function show({ projectId, filter }) {
+  state.loupeOpen.val = false;
   if (projectId) {
-    state.current.val = null;
+    if (projectId !== state.projectId.val) {
+      state.current.val = null;
+      state.photos.val = [];
+      state.selected.val = 0;
+    }
+    state.filter.val = filter;
     state.projectId.val = projectId;
     await loadCurrentProject();
   } else {
     await loadProjects();
     state.projectId.val = null;
     state.current.val = null;
+    state.photos.val = [];
   }
 }
 
 export function initRouter() {
-  window.addEventListener("popstate", () => show(projectFromUrl()));
-  return show(projectFromUrl());
+  window.addEventListener("popstate", () => show(fromUrl()));
+  return show(fromUrl());
 }
 
 export function navigate(projectId) {
-  const query = projectId ? `?project=${encodeURIComponent(projectId)}` : "";
-  window.history.pushState({}, "", window.location.pathname + query);
-  return show(projectId);
+  const filter = { view: "all", minRating: 0 };
+  window.history.pushState({}, "", toUrl(projectId, filter));
+  return show({ projectId, filter });
+}
+
+export function setFilter(filter) {
+  window.history.replaceState({}, "", toUrl(state.projectId.val, filter));
+  state.selected.val = 0;
+  return show({ projectId: state.projectId.val, filter });
 }

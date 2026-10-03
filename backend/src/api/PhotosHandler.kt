@@ -3,6 +3,12 @@ package proof.api
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonObject
+import proof.db.CullView
 import proof.db.NewPhoto
 import proof.db.PhotoRepository
 import proof.db.PhotoRow
@@ -15,9 +21,14 @@ import proof.fs.receiveUpload
 import proof.fs.resolveChild
 import proof.fs.tmpRoot
 import proof.fs.userRoot
+import proof.image.CullState
 import proof.image.ExifReader
+import proof.image.FLAGS
+import proof.image.LABELS
 import proof.image.Rendition
 import proof.image.Renditions
+import proof.image.SidecarUnreadable
+import proof.image.Xmp
 import proof.image.probeSize
 import proof.image.swapsDimensions
 import java.nio.file.FileAlreadyExistsException
@@ -44,10 +55,20 @@ data class ApiPhoto(
     val exposureDisplay: String?,
     val sizeDisplay: String,
     val dimensionsDisplay: String,
+    // Raw cull state: the UI needs these to show stars and flags and to know what a key toggles.
+    val rating: Int,
+    val flag: String,
+    val label: String?,
 )
 
 @Serializable
-data class ApiProjectPhotos(val project: ApiProject, val photos: List<ApiPhoto>)
+data class ApiView(val id: String, val label: String, val count: Int)
+
+@Serializable
+data class ApiProjectPhotos(val project: ApiProject, val views: List<ApiView>, val view: String, val minRating: Int, val photos: List<ApiPhoto>)
+
+@Serializable
+data class ApiCullResult(val photo: ApiPhoto, val views: List<ApiView>)
 
 // Rendition URLs carry a version (the photo's file mtime, or its edit's once Phase 11 lands), so
 // browsers can cache them forever and still pick up a regenerated thumbnail.
@@ -69,8 +90,17 @@ fun PhotoRow.toApi(): ApiPhoto {
         exposureDisplay = exposureDisplay(focalLengthMm, fNumber, exposureTimeS, iso),
         sizeDisplay = fileSizeDisplay(sizeBytes),
         dimensionsDisplay = dimensionsDisplay(width, height),
+        rating = rating,
+        flag = flag,
+        label = label,
     )
 }
+
+fun Map<CullView, Int>.toApi(): List<ApiView> = CullView.entries.map { ApiView(it.id, it.label, getValue(it)) }
+
+// Per-photo locks for read-modify-write of a sidecar. Rapid keypresses on one photo send PATCHes
+// that would otherwise race. Striped, so memory doesn't grow with the number of photos.
+private val CULL_LOCKS = Array(64) { Any() }
 
 // EXIF lives in the first segments of a JPEG (APP1 is capped at 64 KB) or before IDAT in a PNG,
 // so only the head of the file is read for it.
@@ -86,10 +116,62 @@ class PhotosHandler(
 ) {
     private val logger = Logger.getLogger(PhotosHandler::class.qualifiedName)
 
+    // GET /api/projects/:projectId/photos?view=all|picks|unrated|rejects&minRating=0..5
     fun list(ctx: RouteContext, user: AuthenticatedUser): ApiResult<String> {
         val project = ctx.uuidParam("projectId")?.let { projects.findOwned(it, user.id) } ?: return projectNotFound()
+        val view = CullView.fromId(ctx.query["view"]) ?: return Err(400, "INVALID_INPUT", "view must be one of ${CullView.entries.joinToString { it.id }}")
+        val minRating = (ctx.query["minRating"] ?: "0").toIntOrNull()?.takeIf { it in 0..5 }
+            ?: return Err(400, "INVALID_INPUT", "minRating must be 0-5")
         val summary = projects.listSummaries(user.id).first { it.project.id == project.id }
-        return Ok(Json.encodeToString(ApiProjectPhotos(summary.toApi(), photos.listForProject(project.id).map { it.toApi() })))
+        return Ok(
+            Json.encodeToString(
+                ApiProjectPhotos(
+                    project = summary.toApi(),
+                    views = photos.viewCounts(project.id).toApi(),
+                    view = view.id,
+                    minRating = minRating,
+                    photos = photos.listForProject(project.id, view, minRating).map { it.toApi() },
+                ),
+            ),
+        )
+    }
+
+    // PATCH /api/photos/:photoId with any of {"rating": 0-5, "flag": "none|pick|reject",
+    // "label": "Red"|...|null}. The XMP sidecar is written first (it's the truth), then the index.
+    // Returns the updated photo and fresh view counts, so the UI never recounts anything itself.
+    fun cull(ctx: RouteContext, user: AuthenticatedUser): ApiResult<String> {
+        val body = runCatching { Json.parseToJsonElement(ctx.readBody()).jsonObject }.getOrNull()
+            ?: return Err(400, "INVALID_BODY", "Malformed request body")
+        val (photo, source) = locate(ctx, user) ?: return Err(404, "NOT_FOUND", "No such photo")
+        synchronized(CULL_LOCKS[(photo.id.hashCode() and Int.MAX_VALUE) % CULL_LOCKS.size]) {
+            val sidecar = Xmp.sidecarFor(source)
+            val current = try {
+                Xmp.read(sidecar)
+            } catch (e: SidecarUnreadable) {
+                return sidecarUnreadable(photo.filename)
+            }
+            val rating = when (val v = body["rating"]) {
+                null -> current.rating
+                else -> (v as? JsonPrimitive)?.intOrNull?.takeIf { it in 0..5 } ?: return Err(400, "INVALID_INPUT", "rating must be 0-5")
+            }
+            val flag = when (val v = body["flag"]) {
+                null -> current.flag
+                else -> (v as? JsonPrimitive)?.contentOrNull?.takeIf { it in FLAGS } ?: return Err(400, "INVALID_INPUT", "flag must be none, pick or reject")
+            }
+            val label = when (val v = body["label"]) {
+                null -> current.label
+                is JsonNull -> null
+                else -> (v as? JsonPrimitive)?.contentOrNull?.takeIf { it in LABELS } ?: return Err(400, "INVALID_INPUT", "label must be one of ${LABELS.joinToString()} or null")
+            }
+            try {
+                Xmp.write(sidecar, CullState(rating, flag, label))
+            } catch (e: SidecarUnreadable) {
+                return sidecarUnreadable(photo.filename)
+            }
+            photos.updateCull(photo.id, rating, flag, label)
+        }
+        val updated = photos.findOwned(photo.id, user.id)?.photo ?: return Err(404, "NOT_FOUND", "No such photo")
+        return Ok(Json.encodeToString(ApiCullResult(updated.toApi(), photos.viewCounts(photo.projectId).toApi())))
     }
 
     // POST /api/projects/:projectId/photos?filename=IMG_0001.jpg with the file as the raw body: one
@@ -199,6 +281,9 @@ class PhotosHandler(
     }
 
     private fun readHead(path: Path): ByteArray = Files.newInputStream(path).use { it.readNBytes(EXIF_SCAN_BYTES) }
+
+    private fun sidecarUnreadable(filename: String): Err =
+        Err(409, "SIDECAR_UNREADABLE", "$filename.xmp exists but couldn't be read, so proof won't overwrite it (it may hold another tool's edits)")
 
     private fun tooLarge(): Err = Err(413, "TOO_LARGE", "Photos can be at most ${fileSizeDisplay(maxUploadBytes)}")
 }

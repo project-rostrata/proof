@@ -54,6 +54,21 @@ Projects, upload, and ingest are done:
 
 Phase 6 (reconciliation) is **deferred** at the human's request. See `decisions.md` for what that means in practice.
 
+## Phase 7 status (2026-10-02)
+
+Culling is done:
+- **Sidecars:** XMP sidecars are merged into, never overwritten, so darktable's edit history survives.
+- **API:** a PATCH endpoint for rating, flag, and label, with view counts in the response, plus SQL-filtered views.
+- **Keyboard and display:** a keyboard-driven contact sheet and a loupe.
+
+90 tests pass, and the full keyboard flow was verified in headless Chrome against Postgres 18.6. The smoke test caught a sidecar-bloat bug, now fixed.
+
 ## Next step
 
-Phase 7: culling, with XMP sidecars, rating/flag/label endpoints, server-side filtered views, and the keyboard-driven grid plus loupe. The spike was committed in `b71f680` and removed in the next commit. Use `git show b71f680 -- spike/` to see it, including the pinned upstream mini-gl files that Phase 2 copies the kept pieces from.
+Phase 8, the edit pipeline core. The details:
+- **Restructure** the verbatim mini-gl seed (`frontend/src/pipeline/minigl/`) into `gl.js` and `runner.js` with half-float intermediates.
+- **Port the first tools from darktable:** exposure, colorbalancergb contrast/saturation, shadhi, rgbcurve, and the local contrast and sharpen modules. The mapping table is in `decisions.md`.
+- **Recipe schema v1.**
+- **Golden-pixel tests** in `frontend/test/pipeline.html`.
+
+This is the largest phase in the plan. The spike was committed in `b71f680` and removed in the next commit. Use `git show b71f680 -- spike/` to see it, including the pinned upstream mini-gl files that Phase 2 copies the kept pieces from.

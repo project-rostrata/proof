@@ -215,3 +215,21 @@ The human chose to skip reconciliation for now. While it's deferred, everything 
 - XMP edits made by darktable aren't read back.
 
 Missing thumbnails and previews already regenerate on demand, so the derived cache doesn't depend on reconciliation. The data stays files-as-truth regardless: originals and the sidecars proof writes are always on disk, so reconciliation can rebuild or repair the index whenever it lands.
+
+## 2026-10-02 — Phase 7: culling and XMP sidecars
+
+- **proof merges into sidecars and never overwrites them.** darktable keeps its *whole edit history* in the same `IMG_0001.jpg.xmp` file proof uses (the darktable-style naming chosen in Phase 5). Writing a fresh sidecar would destroy it. So `Xmp.write` parses the existing document, changes only proof's properties, and writes everything else back. A sidecar that doesn't parse gets a 409 `SIDECAR_UNREADABLE`, and proof won't touch it.
+- **XMP mapping.** Standard XMP has stars (`xmp:Rating`) and a label (`xmp:Label`) but no pick flag:
+  - **Reject** is written as `xmp:Rating="-1"`, the value Lightroom and darktable treat as rejected.
+  - **Stars** are kept in `proof:Rating`, so un-rejecting restores them.
+  - **The flag itself** goes in `proof:Flag`.
+  - **The namespace** is `urn:x-proof:xmp:1.0`. The `x-` marks it unregistered, and proof doesn't claim a URL it doesn't own.
+  - **Fallback:** a sidecar from another tool with no `proof:` fields falls back to the standard fields, with -1 meaning a reject.
+- **Colour labels use Lightroom's `xmp:Label` names** (Red, Yellow, Green, Blue, Purple), on keys 6–9 as in Lightroom. darktable's own `darktable:colorlabels` isn't written.
+- **Bug found by the smoke test, now fixed: sidecars grew on every write.** The serializer's `INDENT` re-indented on top of existing whitespace text nodes, so each rating change added blank lines, darktable's file included. Now only sidecars proof creates are indented. Existing ones are written back as they are, with a hand-written XML declaration and a normalised trailing newline, so repeated writes are byte-identical. Regression tests cover this, and 31 live writes (bursts of 3 concurrent) left a darktable sidecar clean.
+- **The serializer orders attributes alphabetically.** It's semantically identical XML. darktable reads XMP through exiv2, which doesn't depend on attribute order.
+- **Per-photo locking.** A sidecar update is read-modify-write, and rapid keypresses send overlapping PATCHes. They're serialized per photo using 64 striped monitors, so the lock table doesn't grow with photo count.
+- **A PATCH returns the recounted view totals.** The UI updates its tab counts from that response instead of counting locally (the dumb-UI rule). Updates are optimistic for the photo the user just changed, since that only echoes their own keypress, and are then replaced by the server's version.
+- **Culling doesn't reflow the sheet.** Rejecting a photo while viewing "Picks" doesn't remove it until the view is reloaded, matching Lightroom and Photo Mechanic. That way the selection doesn't jump while culling quickly.
+- **No re-render flicker.** Each photo has its own reactive state, and frames read their static fields through VanJS `rawVal`, so a cull keypress re-renders a few badge nodes instead of re-creating every `<img>`.
+- **Without Phase 6, an existing sidecar's rating isn't shown until proof writes to it.** A darktable rating of 1 shows as unrated in the grid. The first proof change to that photo reads the sidecar as its base, so nothing is lost, and the index then matches.

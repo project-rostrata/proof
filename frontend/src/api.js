@@ -36,7 +36,9 @@ export const api = {
   renameProject: (id, name) => request("PATCH", `/api/projects/${id}`, { name }),
   deleteProject: (id) => request("DELETE", `/api/projects/${id}`),
 
-  projectPhotos: (id) => request("GET", `/api/projects/${id}/photos`),
+  projectPhotos: (id, { view, minRating }) =>
+    request("GET", `/api/projects/${id}/photos?${new URLSearchParams({ view, minRating: String(minRating) })}`),
+  cull: (photoId, change) => request("PATCH", `/api/photos/${photoId}`, change),
 };
 
 export function uploadPhoto(projectId, file, onProgress) {

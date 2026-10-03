@@ -114,6 +114,7 @@ fun buildRouter(
     router.getStream("/api/photos/:photoId/thumb", requireAuthStream(sessions, users, photosHandler.rendition(Rendition.THUMB)))
     router.getStream("/api/photos/:photoId/preview", requireAuthStream(sessions, users, photosHandler.rendition(Rendition.PREVIEW)))
     router.getStream("/api/photos/:photoId/original", requireAuthStream(sessions, users, photosHandler::original))
+    router.patch("/api/photos/:photoId", requireAuth(sessions, users, photosHandler::cull))
     router.serveStatic(staticFileHandler::serve)
     return router
 }

@@ -3,58 +3,34 @@
 A living doc: it describes the system as it exists right now, not the target design
 (`PROJECT_BRIEF.md` has that). Update it whenever a phase lands.
 
-## Current state: projects, upload, ingest (V1_PLAN.md Phase 5)
+## Current state: cull (V1_PLAN.md Phase 7)
 
-```
-Browser (VanJS)                                     HttpServer -> Router (requireAuth on all /api/projects, /api/photos)
-  Auth view (sign in / register)                      ├─ POST/GET/PATCH/DELETE /api/projects[/:id]
-  Projects view (create, rename, delete)              ├─ GET  /api/projects/:id/photos       project + photos, display strings
-  Project view (upload queue + contact sheet)         ├─ POST /api/projects/:id/photos?filename=  raw body, one file
-    upload.js: 3 concurrent XHR uploads               ├─ GET  /api/photos/:id/thumb|preview   generated on demand, cached
-                                                      └─ GET  /api/photos/:id/original
-```
+Phase 6 (reconciliation) is **deferred** (see the decisions log), so nothing re-reads disk changes made outside the app.
 
-**On disk**, under `$PROOF_DATA` (files are the truth, and Postgres indexes them):
-```
-<username>/<project>/originals/<filename>     uploaded files, never modified
-.cache/<photoId>/thumb.jpg, preview.jpg       400 px / 2048 px long edge, upright; deletable
-.tmp/                                         in-flight uploads; cleared at startup
-```
+**Cull data flow.** `PATCH /api/photos/:photoId` takes any of `{rating 0-5, flag none|pick|reject, label Red|Yellow|Green|Blue|Purple|null}`:
+1. Take the per-photo lock (64 striped monitors), so concurrent keypresses can't race the sidecar's read-modify-write.
+2. Read the current state from the XMP sidecar `originals/<file>.xmp`, which is the truth.
+3. Merge the change and write the sidecar (`image/Xmp`). This parses the existing document, updates only proof's properties, and writes it back atomically.
+4. Update the `photos` index row.
+5. Return `{ photo, views }`: the updated photo plus recounted view totals.
 
-**Ingest** (`api/PhotosHandler.upload`). One file per request, streamed:
-1. Check the filename (`fs/ProjectPaths.isValidPhotoFilename`, then `resolveUnderRoot`).
-2. Stream the body to `.tmp/` (`fs/UploadReceiver`). This enforces the size cap while reading,
-   computes SHA-256, and sniffs JPEG/PNG from the magic bytes. The extension has to match the
-   sniffed type.
-3. Deduplicate. The same name with the same hash returns the existing photo, which makes retried
-   batches idempotent. The same name with a different hash returns 409.
-4. Read the header-only pixel size (`image/probeSize`) and the EXIF (`image/ExifReader`), a
-   hand-written, bounds-checked TIFF parser for IFD0 and the Exif IFD.
-5. Atomically move the file into `originals/` and insert the `photos` row, storing upright
-   width/height.
-6. Generate renditions on a background pool.
+A sidecar that can't be parsed returns 409 `SIDECAR_UNREADABLE` and is never overwritten.
 
-**Renditions** (`image/Renditions`):
-- **Decode:** ImageIO decodes with source subsampling down to about 2x the target, and honours an
-  embedded JPEG ICC profile, so P3 phone photos come out correctly in sRGB.
-- **Scale and orient:** a multi-step downscale (bilinear halving, then a final bicubic step), with
-  the EXIF orientation applied after scaling.
-- **Write:** the JPEG is written atomically.
-- **Concurrency:** a 2-slot semaphore bounds concurrent decodes, and concurrent requests for the same
-  photo share one generation.
-- **URLs:** they carry `?v=<mtime>` and are served `immutable`.
+**XMP mapping** (`image/Xmp.kt`):
+- `xmp:Rating` holds the stars, or `-1` when rejected (the de facto reject value).
+- `xmp:Label` holds the colour label (Lightroom's field).
+- `proof:Flag` holds the pick/reject flag and `proof:Rating` the stars, which survive a reject. The namespace is `urn:x-proof:xmp:1.0`.
+- Properties are read in attribute or element form.
+- Parsing is XXE-safe (no DTDs).
+- Existing sidecars are written back un-reindented, with a hand-written XML declaration and exactly one trailing newline, so repeated writes are byte-stable.
 
-**Display strings** (`api/Display.kt`) are built server-side: capture date, camera ("Olympus
-E-PL7"), exposure line ("17 mm · f/2.8 · 1/250 s · ISO 200"), sizes, and counts. The frontend only
-renders them.
+**Filtered views.** `GET /api/projects/:id/photos?view=all|picks|unrated|rejects&minRating=0..5` filters in SQL. The `CullView` predicates are fixed and never built from input. Each response carries `views[]` with every view's count, so the UI never counts or filters.
 
-**Projects** (`api/ProjectsHandler`). A project is a directory, and the filesystem changes first:
-- **Create** makes the directory, then inserts the row.
-- **Rename** uses `fs/renameDirectory`, which refuses existing targets, including empty ones, and
-  then updates the row.
-- **Delete** removes the directory tree, then the rows, then the cache.
-
-Another user's project or photo returns 404, never 403.
+**Frontend.**
+- **Per-photo state:** each photo is its own `van.state`. A cull change re-renders that frame's badges and class only, and the static parts are read through `rawVal`, so `<img>` nodes are never re-created.
+- **Keyboard (`src/cull.js`):** 0–5, P/X/U, 6–9 label toggle, arrows (up/down by the laid-out column count), Enter/Space opens the loupe, Esc closes it. Updates are optimistic, then replaced by the server's photo, and reverted on error.
+- **Filter state:** the filter lives in the URL (`?project=&view=&minRating=`).
+- **Loupe:** a full-screen 2048 px preview on a neutral surround, with the neighbouring previews preloaded.
 
 **Earlier phases, unchanged:**
 - auth (Phase 4): shelf-style accounts and `proof_session` cookies;
@@ -62,14 +38,15 @@ Another user's project or photo returns 404, never 403.
 - build scripts and jar fetching (Phase 2);
 - the mini-gl seed (not loaded until Phase 8).
 
-**Tests: 78**, none needing Postgres. The new ones cover:
+**Tests: 90**, none needing Postgres. Added through Phase 7:
 - EXIF in both byte orders, with truncation, random garbage, and a self-referencing IFD;
 - all 8 orientations, checked against an independent reference;
 - type sniffing;
 - renditions (upright, sized, never upscaled);
 - name validation, and the rename regression;
 - the upload receiver (cap, cleanup, hash);
-- display strings.
+- display strings;
+- XMP read/write: the darktable merge, element-form properties, XXE and broken files refused, and byte-stable rewrites.
 
-Not yet present: reconciliation (Phase 6), cull/XMP (Phase 7), the edit pipeline (Phases 8-11),
+Not yet present: reconciliation (Phase 6, deferred), the edit pipeline (Phases 8-11),
 export (Phase 12), `docker/` and `docs/deployment.md` (Phase 13).

@@ -108,7 +108,14 @@ Missing thumbnails and previews are already regenerated on demand (Phase 5), so 
 
 Reuse `shelf`'s scanner: mtime-based change detection between disk and the index, a `ScheduledExecutorService` backstop scan, and a manual "refresh". It picks up originals or sidecars added or changed outside the app, rebuilds missing cache entries, and re-reads XMP.
 
-## Phase 7 — Cull
+## Phase 7 — Cull — DONE
+
+Built as listed, plus:
+- **Colour labels:** keys 6–9.
+- **Merged sidecars:** an existing sidecar, darktable's included, is merged into rather than overwritten.
+- **Filters in the URL:** the cull filter is mirrored in the URL.
+
+90 tests pass, plus an end-to-end keyboard cull in headless Chrome and a concurrent-write stress test on a darktable sidecar. See `docs/decisions.md`.
 
 - An XMP sidecar reader/writer (`javax.xml`) for rating, flag, and label. Every write goes to the sidecar first, then the index.
 - `PATCH /api/photos/{id}` for rating, flag, and label.
