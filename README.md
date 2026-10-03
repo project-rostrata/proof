@@ -41,6 +41,8 @@ in a plain `edits/` folder. PostgreSQL is only an index over those files.
   - White Balance, Curves, and Details (structure, sharpening).
   - Crop, Rotate/Straighten, and Perspective.
   - Vignette, and Black & White with film emulations, colour filters, and grain.
+  - As in Snapseed, once a tool is open the photo is the control: scroll over it or drag across
+    it to adjust a slider, and drag up or down to pick another.
   - Hold to compare with the original.
   - Edits render live in the browser on a 16-bit WebGL2 pipeline, with the filters ported from
     darktable. Saving renders the original at full resolution, copies its EXIF across, and keeps

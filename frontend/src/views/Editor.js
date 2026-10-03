@@ -6,7 +6,7 @@ import { ASPECT_OPTIONS } from "../pipeline/ops/crop.js";
 import { aspectRatio, centredRect } from "../pipeline/geometry.js";
 import { emptyRecipe, newEntry, loadRecipe, RecipeError } from "../pipeline/recipe.js";
 import { api, saveEdit, ApiError } from "../api.js";
-import { Slider } from "../components/Slider.js";
+import { Slider, formatValue } from "../components/Slider.js";
 import { CurveEditor } from "../components/CurveEditor.js";
 import { Choice } from "../components/Choice.js";
 import { CropOverlay } from "../components/CropOverlay.js";
@@ -30,6 +30,9 @@ const { div, canvas, button, span, h2, p, ol, li } = van.tags;
 //   - a crop: the stack *before* it, with a crop box on top (you're choosing what to keep);
 //   - Rotate or Perspective: the stack up to and including it, with an alignment grid;
 //   - anything else, or nothing selected: the whole stack.
+//
+// As in Snapseed, an open tool's sliders can also be worked on the photo itself (see "adjusting on
+// the photo" below).
 
 // Whatever ends an editing session (Close, Esc, or navigating away, which clears state.editing)
 // goes through this binding. So the previous session is always disposed: its GL context released
@@ -66,6 +69,12 @@ function EditorSession(photoState) {
   const overlayHost = div({ class: "editor-overlay" });
   const frameEl = div({ class: "editor-frame" }, stage, overlayHost);
   const stageEl = div({ class: "editor-stage" });
+
+  // The open tool's plain sliders, shared by its panel and the photo gestures: each one's shown value
+  // (so a gesture moves the panel's slider too), and which one the gestures move.
+  let sliders = { entry: null, specs: [], shown: new Map() };
+  const activeSlider = van.state(null);
+  const picking = van.state(false); // the list of sliders shows while dragging up or down on the photo
 
   const selectedEntry = () => recipe.stack[selected.val];
   const selectedTool = () => (selectedEntry() ? TOOLS[selectedEntry().tool] : null);
@@ -138,11 +147,18 @@ function EditorSession(photoState) {
   const changed = () => { structure.val++; scheduleRender(); };
   // Every change to the recipe goes through edited(): it re-renders and marks the session unsaved.
   const edited = () => { dirty.val = true; scheduleRender(); };
-  const select = (index) => { selected.val = index; changed(); };
+  const setSelected = (index) => {
+    selected.val = index;
+    const entry = recipe.stack[index];
+    const specs = entry ? TOOLS[entry.tool].params.filter((spec) => !spec.kind) : [];
+    sliders = { entry, specs, shown: new Map(specs.map((spec) => [spec.id, van.state(entry.params[spec.id])])) };
+    activeSlider.val = specs[0]?.id ?? null;
+  };
+  const select = (index) => { setSelected(index); changed(); };
   const add = (toolId) => { recipe.stack.push(newEntry(toolId)); dirty.val = true; select(recipe.stack.length - 1); };
   const remove = (index) => {
     recipe.stack.splice(index, 1);
-    selected.val = Math.min(selected.val, recipe.stack.length - 1);
+    setSelected(Math.min(selected.val, recipe.stack.length - 1));
     dirty.val = true;
     changed();
   };
@@ -194,7 +210,7 @@ function EditorSession(photoState) {
       base = updated.editVersion;
       hasSavedEdit.val = false;
       recipe.stack = [];
-      selected.val = -1;
+      setSelected(-1);
       dirty.val = false;
       changed();
     } catch (e) {
@@ -227,6 +243,83 @@ function EditorSession(photoState) {
   function onKeyUp(e) { if (e.key === "\\") setCompare(false); }
   document.addEventListener("keydown", onKey);
   document.addEventListener("keyup", onKeyUp);
+
+  // ---- adjusting on the photo, as in Snapseed ----
+  // With a tool open, the photo is the control. Scrolling over it, or dragging sideways, moves the
+  // highlighted slider. Dragging up or down picks which slider that is, from a list shown on the
+  // photo. A drag across the whole photo moves a slider through half its range, and a mouse-wheel
+  // notch moves it a fortieth. Crop and Curves have no plain sliders, so this does nothing there,
+  // and the photo stays theirs (Crop's box).
+
+  const PICK_STEP_PX = 32; // vertical drag per slider in the list
+  const activeSpec = () => (compare.val ? null : sliders.specs.find((spec) => spec.id === activeSlider.val));
+
+  function setSlider(spec, value) {
+    const step = spec.step ?? 1;
+    const v = Number(Math.min(spec.max, Math.max(spec.min, Math.round(value / step) * step)).toFixed(step < 1 ? 1 : 0));
+    if (v === sliders.entry.params[spec.id]) return;
+    sliders.entry.params[spec.id] = v;
+    sliders.shown.get(spec.id).val = v;
+    edited();
+  }
+
+  let wheel = { spec: null, rest: 0 }; // scrolling not yet worth a whole step
+  stageEl.addEventListener("wheel", (e) => {
+    const spec = activeSpec();
+    if (!spec || e.ctrlKey) return; // ctrl+wheel is a trackpad pinch: leave zooming to the browser
+    e.preventDefault();
+    if (wheel.spec !== spec) wheel = { spec, rest: 0 };
+    const px = e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? stageEl.clientHeight : 1);
+    wheel.rest += (-px * (spec.max - spec.min)) / 4000; // scrolling up raises the value
+    const step = spec.step ?? 1;
+    const whole = Math.trunc(wheel.rest / step) * step;
+    if (!whole) return;
+    wheel.rest -= whole;
+    setSlider(spec, sliders.entry.params[spec.id] + whole);
+  });
+
+  let drag = null;
+  stageEl.addEventListener("pointerdown", (e) => {
+    if (drag || e.button !== 0 || !activeSpec()) return;
+    drag = { id: e.pointerId, x: e.clientX, y: e.clientY, axis: null };
+  });
+  stageEl.addEventListener("pointermove", (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    const spec = activeSpec();
+    if (!spec) return;
+    if (!drag.axis) {
+      if (Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 8) return; // not a drag yet
+      // Measured from here on, so the value doesn't jump by the dead zone.
+      drag = { ...drag, axis: Math.abs(e.clientX - drag.x) > Math.abs(e.clientY - drag.y) ? "x" : "y", x: e.clientX, y: e.clientY,
+        value: sliders.entry.params[spec.id], index: sliders.specs.indexOf(spec) };
+      stageEl.setPointerCapture(e.pointerId);
+      picking.val = drag.axis === "y";
+    } else if (drag.axis === "x") {
+      setSlider(spec, drag.value + ((e.clientX - drag.x) * (spec.max - spec.min)) / (2 * stageEl.clientWidth));
+    } else {
+      const index = Math.max(0, Math.min(sliders.specs.length - 1, drag.index + Math.round((e.clientY - drag.y) / PICK_STEP_PX)));
+      activeSlider.val = sliders.specs[index].id;
+    }
+  });
+  van.derive(() => { structure.val; stageEl.classList.toggle("is-adjustable", !!activeSpec()); });
+
+  const endDrag = (e) => { if (drag?.id === e.pointerId) { drag = null; picking.val = false; } };
+  stageEl.addEventListener("pointerup", endDrag);
+  stageEl.addEventListener("pointercancel", endDrag);
+
+  // The readout on the photo: the highlighted slider and its value, or the whole list while picking.
+  const AdjustReadout = () => () => {
+    structure.val;
+    const specs = sliders.specs;
+    if (!specs.length || compare.val) return emptyNode();
+    const value = (spec) => span({ class: "adjust-value" }, () => formatValue(spec, sliders.shown.get(spec.id).val));
+    if (picking.val) {
+      return div({ class: "adjust-list" }, ...specs.map((spec) =>
+        div({ class: () => (activeSlider.val === spec.id ? "adjust-item is-active" : "adjust-item") }, span(spec.label), value(spec))));
+    }
+    const spec = activeSpec() ?? specs[0];
+    return div({ class: "adjust-pill" }, span(spec.label), value(spec));
+  };
 
   // ---- overlays ----
 
@@ -281,8 +374,8 @@ function EditorSession(photoState) {
           class: () => `btn-ghost btn-small${flipped.val ? " is-active" : ""}`, title: "Flip horizontally",
           onclick: () => { entry.params.flip = !entry.params.flip; flipped.val = entry.params.flip; edited(); },
         }, "Flip")),
-      Slider(tool.params.find((s) => s.id === "angle"), entry.params, edited),
-      p({ class: "editor-hint" }, "Straightening crops to the largest rectangle that fits, so there are no blank corners."),
+      Slider(tool.params.find((s) => s.id === "angle"), entry.params, edited, { shown: sliders.shown.get("angle"), active: activeSlider }),
+      p({ class: "editor-hint" }, "Scroll on the photo, or drag across it, to straighten. Straightening crops to the largest rectangle that fits, so there are no blank corners."),
     ];
   }
 
@@ -298,9 +391,11 @@ function EditorSession(photoState) {
       controls = tool.params.map((spec) => {
         if (spec.kind === "curves") return CurveEditor(entry.params[spec.id], edited);
         if (spec.kind === "choice") return Choice(spec, entry.params, edited);
-        return Slider(spec, entry.params, edited);
+        return Slider(spec, entry.params, edited, { shown: sliders.shown.get(spec.id), active: activeSlider });
       });
-      controls.push(p({ class: "editor-hint" }, "Double-click a slider to reset it."));
+      if (sliders.specs.length) {
+        controls.push(p({ class: "editor-hint" }, "Scroll on the photo, or drag across it, to adjust the highlighted slider. Drag up or down on the photo to pick another. Double-click a slider to reset it."));
+      }
     }
     return div(
       { class: "tool-panel" },
@@ -331,6 +426,7 @@ function EditorSession(photoState) {
       return span({ class: s.kind === "loading" ? "editor-loading" : "visually-hidden" }, "Loading…");
     },
     frameEl,
+    AdjustReadout(),
     () => (compare.val ? span({ class: "compare-badge" }, "Original") : emptyNode()));
 
   const element = div(

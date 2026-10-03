@@ -414,3 +414,32 @@ Colour labels came in at Phase 7 as a Lightroom convention: keys 6–9, `xmp:Lab
 The loupe and editor have a fixed dark surround (`#0E0E0E`) in both themes, because photos are judged against neutral dark grey. But the shared components inside them took their colours from the theme tokens. In the light theme that meant near-black text on near-black. The "Add a tool" buttons, Compare, and Close measured 1.1:1 contrast, and the active edit's name 2.7:1.
 
 The dark token set is now declared on `:root, .loupe, .editor` together. Since custom properties set on an element beat inherited ones, these two views get the dark values (and `color-scheme: dark` for native controls) whatever the system theme, with no duplicated values. An automated check of every visible text element in both views, in both schemes, now finds nothing under 3:1.
+
+## 2026-10-03 — Adjusting on the photo, as in Snapseed
+
+The human asked for Snapseed's editing model: open a tool, then adjust its slider by working on the photo rather than the panel. On a phone, where the panel sits below the photo and the open tool's sliders are below the fold, this is the main way to edit.
+
+**The model:**
+- With a tool open, scrolling over the photo, or dragging across it with a mouse or finger, moves the highlighted slider.
+- Dragging up or down picks which slider is highlighted. While picking, Snapseed's list shows on the photo, one row per 32 px.
+- A pill at the top of the photo always names the highlighted slider and shows its value. Pressing or focusing a slider in the panel also highlights it, and the panel marks it.
+
+**Rates, relative to each slider's range:**
+- Dragging across the whole photo moves a slider through half its range, so ±100 sliders move 100 units and Straighten (±45°) moves 45°.
+- A mouse-wheel notch (100 px) moves it a fortieth: 5 units, or 2.25°.
+- Scrolling up raises the value. Smooth-scroll and trackpad deltas below one step accumulate instead of being lost.
+- A drag decides its direction after 8 px and measures from that point, so the value never jumps.
+
+**What it leaves alone:**
+- It only drives plain sliders (params with no `kind`). Crop keeps its box, Curves its curve editor, and B&W's film and filter choices stay in the panel.
+- It's off while comparing.
+- Ctrl+wheel (a trackpad pinch) is left to the browser. So is a two-finger pinch: the stage's `touch-action: pinch-zoom` hands only one-finger drags to the gestures.
+
+**Two implementation details:**
+- The readouts on the photo are neutral (no accent colour) because they sit over what's being judged. The accent highlight stays in the panel.
+- `Slider` now takes an optional shared `shown` state and an `active` state. Its input's value is bound to `shown`, so the gestures move the panel's slider too, and setting an input to the value it already holds doesn't disturb a drag in progress. `formatValue` is shared by the panel label and the pill.
+
+Checked in headless Chrome, on desktop and with emulated touch at phone size:
+- wheel notches, mouse drags both ways, a vertical drag to pick, a press on a panel row, the panel's own slider and double-click reset, and a one-finger touch drag all moved the right slider by the expected amount;
+- Compare, Crop, and Curves showed no readout and ignored the gestures;
+- the saved recipe held exactly the gesture-set values.

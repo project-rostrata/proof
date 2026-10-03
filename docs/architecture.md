@@ -70,6 +70,11 @@ preview JPEG (2048 px, upright) ──> Pipeline.setSource ──> SRGB8 texture
 - **Panel:** add a tool, the stack (select or remove entries), the active tool's sliders or curve editor, and Compare (hold the button or `\`).
 - **Cleanup:** one session at a time, disposed whenever `state.editing` changes. That releases the GL context and the key listeners.
 - **Re-rendering:** the recipe is mutated in place, and only structural changes re-render the panel, so sliders aren't re-created mid-drag.
+- **Adjusting on the photo (Snapseed's model):**
+  - With a tool open, scrolling over the photo or dragging across it moves the highlighted slider, and dragging up or down picks which slider is highlighted.
+  - A pill on the photo shows that slider and its value, and a list replaces it while picking.
+  - Each open slider's shown value is a `van.state` shared by the panel's `Slider` and the gestures, so either moves the other.
+  - Only plain sliders (params with no `kind`) take part, so Crop's box and Curves keep the photo to themselves.
 
 ### Cull (Phase 7)
 

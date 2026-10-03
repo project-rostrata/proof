@@ -2,24 +2,33 @@ import van from "../../lib/van-1.6.1.js";
 
 const { div, label, span, input } = van.tags;
 
-// One tool parameter. The input element is never re-rendered while it's being dragged: the value
-// lives in the caller's params object, and only the number label is reactive. Double-click resets
-// it to the default (as in Lightroom).
-export function Slider(spec, params, onChange) {
-  const shown = van.state(params[spec.id]);
+// How a slider's value reads, in the panel and on the photo: "+25", "-3.5°".
+export function formatValue(spec, value) {
+  const decimals = (spec.step ?? 1) < 1 ? 1 : 0;
+  return (value > 0 && spec.min < 0 ? "+" : "") + value.toFixed(decimals) + (spec.unit ?? "");
+}
+
+// One tool parameter. The value lives in the caller's params object, and `shown` mirrors it for the
+// number label and the input, so something else (the editor's photo gestures) can move the slider
+// too. The input is never re-created mid-drag, and setting its value to what it already holds
+// doesn't disturb a drag. Double-click resets it to the default (as in Lightroom). With `active`,
+// the slider is highlighted while it's the one the photo gestures move, and pressing or focusing
+// it makes it that one.
+export function Slider(spec, params, onChange, { shown = van.state(params[spec.id]), active = null } = {}) {
   const id = `slider-${spec.id}-${Math.random().toString(36).slice(2, 8)}`;
-  const step = spec.step ?? 1;
-  const decimals = step < 1 ? 1 : 0;
+  const set = (value) => { params[spec.id] = value; shown.val = value; onChange(); };
+  const activate = () => { if (active) active.val = spec.id; };
   const el = input({
-    id, type: "range", min: spec.min, max: spec.max, step, value: params[spec.id],
-    oninput: (e) => { params[spec.id] = Number(e.target.value); shown.val = params[spec.id]; onChange(); },
-    ondblclick: (e) => { params[spec.id] = spec.default; e.target.value = spec.default; shown.val = spec.default; onChange(); },
+    id, type: "range", min: spec.min, max: spec.max, step: spec.step ?? 1, value: () => shown.val,
+    oninput: (e) => set(Number(e.target.value)),
+    ondblclick: () => set(spec.default),
+    onfocus: activate,
   });
   return div(
-    { class: "slider" },
+    { class: () => (active?.val === spec.id ? "slider is-active" : "slider"), onpointerdown: activate },
     div({ class: "slider-head" },
       label({ for: id }, spec.label),
-      span({ class: "slider-value" }, () => (shown.val > 0 && spec.min < 0 ? "+" : "") + shown.val.toFixed(decimals) + (spec.unit ?? ""))),
+      span({ class: "slider-value" }, () => formatValue(spec, shown.val))),
     el,
   );
 }
