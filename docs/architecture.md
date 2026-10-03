@@ -3,7 +3,7 @@
 A living doc: it describes the system as it exists right now, not the target design
 (`PROJECT_BRIEF.md` has that). Update it whenever a phase lands.
 
-## Current state: v1 (V1_PLAN.md Phases 1–14; export and reconciliation deferred)
+## Current state: v1 (V1_PLAN.md Phases 1–14; export deferred)
 
 Docker images: see `deployment.md`. CI: `.github/workflows/docker-build.yml` (backend tests in Docker, pipeline tests via `frontend/test/run-headless.sh`, then the standalone image to GHCR).
 
@@ -78,7 +78,24 @@ preview JPEG (2048 px, upright) ──> Pipeline.setSource ──> SRGB8 texture
 
 ### Cull (Phase 7)
 
-Phase 6 (reconciliation) is **deferred** (see the decisions log), so nothing re-reads disk changes made outside the app.
+Sidecars changed by other tools are re-read by reconciliation (below). Cull writes record the sidecar's mtime (`photos.sidecar_mtime`), so proof's own writes aren't re-read.
+
+### Reconciliation (Phase 6)
+
+`backend/src/index/`. The files are the truth, and the index is brought back in line with them.
+- **`ReconcilePlan.kt` is pure.** It compares a project's originals on disk (`DiskPhoto`: size, mtime, sidecar mtime, edit mtime) with its rows. The result is added, removed, replaced, sidecar-changed, and edit-changed photos. It also compares project folder names with project rows.
+- **`Reconciler.kt` does the I/O.**
+  - It lists only real directories and regular files, and never follows symlinks.
+  - It skips hidden files and invalid names.
+  - It hashes and decodes new or replaced originals *before* taking the project lock. Under the lock it re-lists, re-plans, and applies, using prepared work only for files whose size and mtime haven't changed since.
+  - It counts what was applied, so a junk `.jpg` or an unparseable sidecar doesn't log every pass.
+  - A missing user folder (unmounted storage) is skipped, never read as "every project deleted".
+- **`Locks.kt`:** striped user and project locks, taken user first. Upload (name check, move, and insert), cull, edit commit and revert, and project create, rename, and delete all take the same locks reconciliation does.
+- **Triggers:**
+  - `GET /api/projects` reconciles the project set, and a newly found project's photos.
+  - `GET /api/projects/:id/photos` reconciles that project.
+  - A backstop pass runs every `PROOF_RECONCILE_INTERVAL_MINUTES` (default 15, 0 off), first a minute after startup.
+- **Timestamps** go through `fs/FileTimes.kt` (truncated to microseconds, Postgres's precision), or every file would look changed on every pass.
 
 **Cull data flow.** `PATCH /api/photos/:photoId` takes either or both of `{rating 0-5, flag none|pick|reject}`:
 1. Take the per-photo lock (64 striped monitors), so concurrent keypresses can't race the sidecar's read-modify-write.
@@ -122,5 +139,4 @@ A sidecar that can't be parsed returns 409 `SIDECAR_UNREADABLE` and is never ove
 - display strings;
 - XMP read/write: the darktable merge, element-form properties, XXE and broken files refused, and byte-stable rewrites.
 
-Not yet present: reconciliation (Phase 6, deferred), export (Phase 12, skipped for now),
-export (Phase 12), `docker/` and `docs/deployment.md` (Phase 13).
+Not yet present: export (Phase 12, skipped for now).

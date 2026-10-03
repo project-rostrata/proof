@@ -1,5 +1,7 @@
 package proof.api
 
+import proof.index.Locks
+import proof.index.Reconciler
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -16,6 +18,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.sql.SQLException
 import java.util.UUID
+import java.util.logging.Level
 import java.util.logging.Logger
 
 @Serializable
@@ -49,27 +52,39 @@ class ProjectsHandler(
     private val photos: PhotoRepository,
     private val renditions: Renditions,
     private val dataRoot: Path,
+    private val locks: Locks,
+    private val reconciler: Reconciler,
 ) {
     private val logger = Logger.getLogger(ProjectsHandler::class.qualifiedName)
 
-    fun list(ctx: RouteContext, user: AuthenticatedUser): ApiResult<String> =
-        Ok(Json.encodeToString(projects.listSummaries(user.id).map { it.toApi() }))
+    // Picks up project folders added, renamed, or deleted outside the app first. A failure there is
+    // logged, and the index is shown as it is.
+    fun list(ctx: RouteContext, user: AuthenticatedUser): ApiResult<String> {
+        try {
+            reconciler.reconcileProjectSet(user.id, user.username)
+        } catch (e: Exception) {
+            logger.log(Level.WARNING, "reconciling projects for ${user.username} failed", e)
+        }
+        return Ok(Json.encodeToString(projects.listSummaries(user.id).map { it.toApi() }))
+    }
 
     fun create(ctx: RouteContext, user: AuthenticatedUser): ApiResult<String> {
         val name = readName(ctx) ?: return Err(400, "INVALID_BODY", "Malformed request body")
         val dir = resolveChild(userRoot(dataRoot, user.username), name, ::isValidProjectName)
             ?: return Err(400, "INVALID_NAME", NAME_RULES)
-        try {
-            Files.createDirectory(dir)
-        } catch (e: FileAlreadyExistsException) {
-            return Err(409, "PROJECT_EXISTS", "A project called \"$name\" already exists")
-        }
-        val project = try {
-            projects.create(user.id, name)
-        } catch (e: SQLException) {
-            Files.deleteIfExists(dir) // created above and still empty
-            if (e.sqlState == UNIQUE_VIOLATION_SQLSTATE) return Err(409, "PROJECT_EXISTS", "A project called \"$name\" already exists")
-            throw e
+        val project = locks.user(user.id) {
+            try {
+                Files.createDirectory(dir)
+            } catch (e: FileAlreadyExistsException) {
+                return Err(409, "PROJECT_EXISTS", "A project called \"$name\" already exists")
+            }
+            try {
+                projects.create(user.id, name)
+            } catch (e: SQLException) {
+                Files.deleteIfExists(dir) // created above and still empty
+                if (e.sqlState == UNIQUE_VIOLATION_SQLSTATE) return Err(409, "PROJECT_EXISTS", "A project called \"$name\" already exists")
+                throw e
+            }
         }
         return Ok(Json.encodeToString(ProjectSummaryRow(project, 0, null, null).toApi()))
     }
@@ -81,13 +96,15 @@ class ProjectsHandler(
         val root = userRoot(dataRoot, user.username)
         val from = resolveChild(root, project.name, ::isValidProjectName) ?: return Err(500, "INTERNAL_ERROR", "Stored project name is invalid")
         val to = resolveChild(root, newName, ::isValidProjectName) ?: return Err(400, "INVALID_NAME", NAME_RULES)
-        if (!renameDirectory(from, to)) return Err(409, "PROJECT_EXISTS", "A project called \"$newName\" already exists")
-        try {
-            projects.rename(project.id, newName)
-        } catch (e: SQLException) {
-            renameDirectory(to, from)
-            if (e.sqlState == UNIQUE_VIOLATION_SQLSTATE) return Err(409, "PROJECT_EXISTS", "A project called \"$newName\" already exists")
-            throw e
+        locks.user(user.id) {
+            if (!renameDirectory(from, to)) return Err(409, "PROJECT_EXISTS", "A project called \"$newName\" already exists")
+            try {
+                projects.rename(project.id, newName)
+            } catch (e: SQLException) {
+                renameDirectory(to, from)
+                if (e.sqlState == UNIQUE_VIOLATION_SQLSTATE) return Err(409, "PROJECT_EXISTS", "A project called \"$newName\" already exists")
+                throw e
+            }
         }
         return Ok(Json.encodeToString(summaryOf(user, project.id)))
     }
@@ -98,11 +115,16 @@ class ProjectsHandler(
         val project = ownedProject(ctx, user) ?: return projectNotFound()
         val dir = resolveChild(userRoot(dataRoot, user.username), project.name, ::isValidProjectName)
             ?: return Err(500, "INTERNAL_ERROR", "Stored project name is invalid")
-        val photoIds = photos.idsForProject(project.id)
-        if (Files.exists(dir)) {
-            Files.walk(dir).use { paths -> paths.sorted(Comparator.reverseOrder()).forEach(Files::delete) }
+        val photoIds = locks.user(user.id) {
+            locks.project(project.id) {
+                val ids = photos.idsForProject(project.id)
+                if (Files.exists(dir)) {
+                    Files.walk(dir).use { paths -> paths.sorted(Comparator.reverseOrder()).forEach(Files::delete) }
+                }
+                projects.delete(project.id)
+                ids
+            }
         }
-        projects.delete(project.id)
         for (id in photoIds) {
             try {
                 renditions.delete(id)

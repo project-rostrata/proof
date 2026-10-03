@@ -98,15 +98,22 @@ Verified with 78 tests, an API smoke test against Postgres 18.6, and a headless-
 - Thumbnail (about 400 px) and preview (about 2048 px) generation with ImageIO/`Graphics2D`, using a multi-step downscale and with orientation applied, cached under `.cache/`.
 - Frontend: a drag-and-drop or file-picker batch upload with a queue of about 3 concurrent uploads and progress per file.
 
-## Phase 6 — Reconciliation — DEFERRED
+## Phase 6 — Reconciliation — DONE (2026-10-03)
 
-Skipped for now at the human's request (2026-10-02). Until it lands:
-- **Changes made outside the app aren't picked up.** Photos or project folders added, renamed, or deleted on disk directly (over SMB, for example) don't show up in proof.
-- **Ratings from other tools aren't read.** proof *writes* XMP sidecars (Phase 7) but doesn't re-read sidecars changed by other tools such as darktable.
+Deferred on 2026-10-02 and built after Phase 14. `backend/src/index/`:
+- **Pure planner** (`ReconcilePlan.kt`), unit-tested, as in `shelf`.
+- **I/O glue** (`Reconciler.kt`).
+- **One locking scheme** (`Locks.kt`) shared with upload, cull, edit save and revert, and project create, rename, and delete.
 
-Missing thumbnails and previews are already regenerated on demand (Phase 5), so the cache doesn't depend on this phase. See `docs/decisions.md`.
+**What it picks up:**
+- project folders added, renamed, or deleted outside the app;
+- originals added, replaced in place, or deleted;
+- XMP sidecars written, added, or deleted by other tools;
+- `edits/` renders and recipes added or removed by hand.
 
-Reuse `shelf`'s scanner: mtime-based change detection between disk and the index, a `ScheduledExecutorService` backstop scan, and a manual "refresh". It picks up originals or sidecars added or changed outside the app, rebuilds missing cache entries, and re-reads XMP.
+**When it runs:** opening the projects list, opening a project, and a backstop pass every `PROOF_RECONCILE_INTERVAL_MINUTES` (default 15). Reloading the page is the "refresh", so there's no button.
+
+See `docs/decisions.md`.
 
 ## Phase 7 — Cull — DONE
 

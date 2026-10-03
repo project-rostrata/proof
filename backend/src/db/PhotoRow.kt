@@ -27,9 +27,12 @@ data class PhotoRow(
     val flag: String,
     val hasEdit: Boolean,
     val editMtime: Instant?,
+    val sidecarMtime: Instant?, // the XMP sidecar as last read or written; null if none has been seen
 )
 
-// What ingest knows about a new photo. Cull and edit state start at their column defaults.
+// What's read from an original itself: everything the index records about the file, for a new
+// photo (upload or reconciliation) or one whose original changed on disk. Cull and edit state come
+// from elsewhere (the sidecar and edits/), and start at their column defaults.
 data class NewPhoto(
     val projectId: UUID,
     val filename: String,

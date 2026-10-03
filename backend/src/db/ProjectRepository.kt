@@ -61,6 +61,9 @@ class ProjectRepository(private val database: Database) {
             },
         )
 
+    fun listForOwner(ownerId: UUID): List<ProjectRow> =
+        database.queryList("SELECT $PROJECT_COLUMNS FROM projects p WHERE p.owner_id = ?", bind = { it.setObject(1, ownerId) }, mapRow = ::toRow)
+
     fun rename(id: UUID, name: String) {
         database.update(
             "UPDATE projects SET name = ?, updated_at = now() WHERE id = ?",

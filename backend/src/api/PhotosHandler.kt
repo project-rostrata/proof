@@ -8,7 +8,6 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
 import proof.db.CullView
-import proof.db.NewPhoto
 import proof.db.PhotoRepository
 import proof.db.PhotoRow
 import proof.db.ProjectRepository
@@ -22,7 +21,6 @@ import proof.fs.resolveChild
 import proof.fs.tmpRoot
 import proof.fs.userRoot
 import proof.image.CullState
-import proof.image.ExifReader
 import proof.image.FLAGS
 import proof.image.Rendition
 import proof.image.RenditionGroup
@@ -30,10 +28,13 @@ import proof.image.Renditions
 import proof.image.group
 import proof.image.SidecarUnreadable
 import proof.image.Xmp
-import proof.image.probeSize
-import proof.image.swapsDimensions
-import java.nio.file.FileAlreadyExistsException
+import proof.image.readOriginalFacts
+import proof.index.Locks
+import proof.index.Reconciler
+import proof.index.toNewPhoto
+import proof.fs.fileMtime
 import java.nio.file.Files
+import java.nio.file.LinkOption
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 import java.time.Instant
@@ -104,14 +105,6 @@ fun PhotoRow.toApi(): ApiPhoto {
 
 fun Map<CullView, Int>.toApi(): List<ApiView> = CullView.entries.map { ApiView(it.id, it.label, getValue(it)) }
 
-// Per-photo locks for read-modify-write of a sidecar. Rapid keypresses on one photo send PATCHes
-// that would otherwise race. Striped, so memory doesn't grow with the number of photos.
-private val CULL_LOCKS = Array(64) { Any() }
-
-// EXIF lives in the first segments of a JPEG (APP1 is capped at 64 KB) or before IDAT in a PNG,
-// so only the head of the file is read for it.
-private const val EXIF_SCAN_BYTES = 1 shl 20
-
 class PhotosHandler(
     private val projects: ProjectRepository,
     private val photos: PhotoRepository,
@@ -120,6 +113,8 @@ class PhotosHandler(
     private val renditionExecutor: ExecutorService,
     private val dataRoot: Path,
     private val maxUploadBytes: Long,
+    private val locks: Locks,
+    private val reconciler: Reconciler,
 ) {
     private val logger = Logger.getLogger(PhotosHandler::class.qualifiedName)
 
@@ -129,7 +124,14 @@ class PhotosHandler(
         val view = CullView.fromId(ctx.query["view"]) ?: return Err(400, "INVALID_INPUT", "view must be one of ${CullView.entries.joinToString { it.id }}")
         val minRating = (ctx.query["minRating"] ?: "0").toIntOrNull()?.takeIf { it in 0..5 }
             ?: return Err(400, "INVALID_INPUT", "minRating must be 0-5")
-        val summary = projects.listSummaries(user.id).first { it.project.id == project.id }
+        // Pick up anything changed on disk outside the app first. A failure there is logged, and the
+        // index is shown as it is.
+        try {
+            reconciler.reconcileProject(user.username, project)
+        } catch (e: Exception) {
+            logger.log(Level.WARNING, "reconciling project ${project.id} failed", e)
+        }
+        val summary = projects.listSummaries(user.id).firstOrNull { it.project.id == project.id } ?: return projectNotFound()
         return Ok(
             Json.encodeToString(
                 ApiProjectPhotos(
@@ -152,7 +154,9 @@ class PhotosHandler(
         val located = locator.locate(ctx, user) ?: return Err(404, "NOT_FOUND", "No such photo")
         val photo = located.photo
         val source = located.original
-        synchronized(CULL_LOCKS[(photo.id.hashCode() and Int.MAX_VALUE) % CULL_LOCKS.size]) {
+        // The sidecar's read-modify-write is under the project lock: rapid keypresses send PATCHes
+        // that would otherwise race each other, and reconciliation re-reads sidecars.
+        locks.project(photo.projectId) {
             val sidecar = Xmp.sidecarFor(source)
             val current = try {
                 Xmp.read(sidecar)
@@ -172,7 +176,7 @@ class PhotosHandler(
             } catch (e: SidecarUnreadable) {
                 return sidecarUnreadable(photo.filename)
             }
-            photos.updateCull(photo.id, rating, flag)
+            photos.updateCull(photo.id, rating, flag, fileMtime(sidecar))
         }
         val updated = photos.findOwned(photo.id, user.id)?.photo ?: return Err(404, "NOT_FOUND", "No such photo")
         return Ok(Json.encodeToString(ApiCullResult(updated.toApi(), photos.viewCounts(photo.projectId).toApi())))
@@ -202,45 +206,29 @@ class PhotosHandler(
             if (extension !in received.type.extensions) {
                 return Err(400, "UNSUPPORTED_TYPE", "$filename is a ${received.type.name} file, but its name says .$extension")
             }
-            // Re-uploading the identical file (a retried batch) succeeds and returns the existing
-            // photo. A different file under the same name is a conflict, never a silent overwrite.
-            photos.findByFilename(project.id, filename)?.let { existing ->
-                return if (existing.contentSha256 == received.sha256) Ok(Json.encodeToString(existing.toApi()))
-                else Err(409, "FILENAME_TAKEN", "This project already has a different $filename")
-            }
-            val (storedW, storedH) = probeSize(received.path) ?: return Err(400, "UNREADABLE_IMAGE", "$filename couldn't be decoded")
-            val exif = ExifReader.read(readHead(received.path))
-            try {
+            val facts = readOriginalFacts(received.path) ?: return Err(400, "UNREADABLE_IMAGE", "$filename couldn't be decoded")
+            // Under the project lock from the name check to the insert, so reconciliation can't
+            // index the file in between (and then lose it to this upload's cleanup below).
+            val photo = locks.project(project.id) {
+                // Re-uploading the identical file (a retried batch) succeeds and returns the existing
+                // photo. A different file under the same name is a conflict, never a silent overwrite.
+                photos.findByFilename(project.id, filename)?.let { existing ->
+                    return if (existing.contentSha256 == received.sha256) Ok(Json.encodeToString(existing.toApi()))
+                    else Err(409, "FILENAME_TAKEN", "This project already has a different $filename")
+                }
+                // ATOMIC_MOVE is rename(2), which silently replaces an existing file. A file put in the
+                // folder outside the app, and not indexed yet, must never be overwritten.
+                if (Files.exists(target, LinkOption.NOFOLLOW_LINKS)) {
+                    return Err(409, "FILENAME_TAKEN", "This project's folder already has a file called $filename")
+                }
                 Files.move(received.path, target, StandardCopyOption.ATOMIC_MOVE)
-            } catch (e: FileAlreadyExistsException) {
-                return Err(409, "FILENAME_TAKEN", "This project already has a different $filename")
-            }
-            makeShareable(target)
-            val photo = try {
-                photos.insert(
-                    NewPhoto(
-                        projectId = project.id,
-                        filename = filename,
-                        sizeBytes = received.sizeBytes,
-                        mtime = Files.getLastModifiedTime(target).toInstant(),
-                        contentSha256 = received.sha256,
-                        width = if (swapsDimensions(exif.orientation)) storedH else storedW,
-                        height = if (swapsDimensions(exif.orientation)) storedW else storedH,
-                        orientation = exif.orientation,
-                        captureTime = exif.captureTime,
-                        captureOffset = exif.captureOffset,
-                        cameraMake = exif.make,
-                        cameraModel = exif.model,
-                        lens = exif.lens,
-                        focalLengthMm = exif.focalLengthMm,
-                        fNumber = exif.fNumber,
-                        exposureTimeS = exif.exposureTimeS,
-                        iso = exif.iso,
-                    ),
-                )
-            } catch (e: Exception) {
-                Files.deleteIfExists(target) // the upload failed as a whole, so don't leave the file behind
-                throw e
+                makeShareable(target)
+                try {
+                    photos.insert(facts.toNewPhoto(project.id, filename, received.sizeBytes, fileMtime(target), received.sha256))
+                } catch (e: Exception) {
+                    Files.deleteIfExists(target) // the upload failed as a whole, so don't leave the file behind
+                    throw e
+                }
             }
             projects.touch(project.id)
             renditionExecutor.submit {
@@ -281,8 +269,6 @@ class PhotosHandler(
         val type = if (located.photo.filename.substringAfterLast('.').lowercase() == "png") "image/png" else "image/jpeg"
         return streamFile(located.original, type, mapOf("Cache-Control" to "private, no-cache"))
     }
-
-    private fun readHead(path: Path): ByteArray = Files.newInputStream(path).use { it.readNBytes(EXIF_SCAN_BYTES) }
 
     private fun sidecarUnreadable(filename: String): Err =
         Err(409, "SIDECAR_UNREADABLE", "$filename.xmp exists but couldn't be read, so proof won't overwrite it (it may hold another tool's edits)")

@@ -27,6 +27,8 @@ class UserRepository(private val database: Database) {
             mapRow = ::toRow,
         )
 
+    fun listAll(): List<UserRow> = database.queryList("SELECT $USER_COLUMNS FROM users ORDER BY username", mapRow = ::toRow)
+
     fun findById(id: UUID): UserRow? =
         database.queryOneOrNull(
             "SELECT $USER_COLUMNS FROM users WHERE id = ?",

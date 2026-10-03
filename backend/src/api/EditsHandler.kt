@@ -1,5 +1,7 @@
 package proof.api
 
+import proof.fs.fileMtime
+import proof.index.Locks
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
@@ -34,6 +36,7 @@ class EditsHandler(
     private val renditionExecutor: ExecutorService,
     private val dataRoot: Path,
     private val maxUploadBytes: Long,
+    private val locks: Locks,
 ) {
     private val logger = Logger.getLogger(EditsHandler::class.qualifiedName)
 
@@ -58,9 +61,7 @@ class EditsHandler(
         // Optimistic concurrency: a save must start from the edit that's on disk now, so a stale tab
         // can't silently overwrite a newer edit.
         val base = ctx.query["base"] ?: return Err(400, "INVALID_INPUT", "base is required")
-        if (base != editVersion(photo.editMtime)) {
-            return Err(409, "EDIT_CHANGED", "This photo's edit changed since you opened it. Reopen the editor to continue from the latest version")
-        }
+        if (base != editVersion(photo.editMtime)) return editChanged()
         // Two originals must never share a render file (scan.png and scan.png.jpg would).
         val clash = photos.filenamesInProject(photo.projectId).firstOrNull { it != photo.filename && renderName(it) == renderName(photo.filename) }
         if (clash != null) return Err(409, "RENDER_NAME_TAKEN", "Can't save: ${photo.filename} and $clash would share the edited file ${renderName(photo.filename)}")
@@ -82,15 +83,23 @@ class EditsHandler(
                 Files.write(renderTmp, spliced)
             }
             Files.writeString(recipeTmp, parsed.recipe)
-            Files.move(renderTmp, located.render, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
-            Files.move(recipeTmp, located.recipe, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
-            makeShareable(located.render)
-            makeShareable(located.recipe)
+            // The commit is under the project lock, and the base is checked again there: two tabs
+            // saving at once can't both pass the check above, and reconciliation can't read a
+            // half-written pair.
+            val conflict = locks.project(photo.projectId) {
+                if (base != editVersion(photos.findById(photo.id)?.editMtime)) return@project true
+                Files.move(renderTmp, located.render, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+                Files.move(recipeTmp, located.recipe, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+                makeShareable(located.render)
+                makeShareable(located.recipe)
+                photos.updateEdit(photo.id, fileMtime(located.render), parsed.recipeVersion)
+                false
+            }
+            if (conflict) return editChanged()
         } finally {
             Files.deleteIfExists(renderTmp)
             Files.deleteIfExists(recipeTmp)
         }
-        photos.updateEdit(photo.id, Files.getLastModifiedTime(located.render).toInstant(), parsed.recipeVersion)
         regenerateDisplay(photo.id, located.render, 1)
         return Ok(Json.encodeToString(photos.findById(photo.id)!!.toApi()))
     }
@@ -98,12 +107,17 @@ class EditsHandler(
     // DELETE /api/photos/:photoId/edit: revert to the original. The render and recipe are deleted.
     fun delete(ctx: RouteContext, user: AuthenticatedUser): ApiResult<String> {
         val located = locator.locate(ctx, user) ?: return Err(404, "NOT_FOUND", "No such photo")
-        Files.deleteIfExists(located.render)
-        Files.deleteIfExists(located.recipe)
-        photos.clearEdit(located.photo.id)
+        locks.project(located.photo.projectId) {
+            Files.deleteIfExists(located.render)
+            Files.deleteIfExists(located.recipe)
+            photos.clearEdit(located.photo.id)
+        }
         regenerateDisplay(located.photo.id, located.original, located.photo.orientation)
         return Ok(Json.encodeToString(photos.findById(located.photo.id)!!.toApi()))
     }
+
+    private fun editChanged(): Err =
+        Err(409, "EDIT_CHANGED", "This photo's edit changed since you opened it. Reopen the editor to continue from the latest version")
 
     private fun regenerateDisplay(photoId: java.util.UUID, source: Path, orientation: Int) {
         renditions.invalidateDisplay(photoId)

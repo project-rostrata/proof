@@ -21,6 +21,7 @@ Settings, all set through the environment or a `docker/.env` file:
 | `PROOF_SECURE_COOKIES` | `false` | **Set to `true` behind HTTPS.** |
 | `PROOF_MAX_UPLOAD_BYTES` | `100000000` | 100 MB per photo. |
 | `PROOF_SESSION_DURATION_HOURS` | `720` | |
+| `PROOF_RECONCILE_INTERVAL_MINUTES` | `15` | How often the background pass looks for changes made outside the app (over SMB, by darktable). Opening a page already checks what it shows. `0` turns the background pass off. |
 
 ## Standalone (one container, Postgres bundled)
 

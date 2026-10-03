@@ -98,7 +98,7 @@ Docker is done. See `docs/deployment.md`. The compose and standalone images were
 
 ## Phase 14 status (2026-10-02)
 
-v1 is built, except export (Phase 12, skipped) and reconciliation (Phase 6, deferred). CI exists but has never run on GitHub: there's no remote yet.
+v1 is built, except export (Phase 12, skipped). Reconciliation (Phase 6) was built afterwards, on 2026-10-03. CI exists but has never run on GitHub: there's no remote yet.
 
 **For the human:**
 - try the whole flow on a real desktop and phone with real photos;

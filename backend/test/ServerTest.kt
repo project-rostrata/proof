@@ -25,7 +25,7 @@ private val noDatabase = Database(ConnectionPool(listOf(
 private fun withServer(block: (base: String, client: HttpClient) -> Unit) {
     val frontend = Files.createTempDirectory("proof-server-test")
     Files.writeString(frontend.resolve("index.html"), "<!doctype html>")
-    val router = buildRouter(
+    val router = buildApp(
         frontendDir = frontend,
         dataRoot = frontend.resolve("data"),
         database = noDatabase,
@@ -33,7 +33,7 @@ private fun withServer(block: (base: String, client: HttpClient) -> Unit) {
         renditionExecutor = daemonPool("test-renditions", 1),
         authConfig = AuthConfig(sessionDurationHours = 1, secureCookies = false),
         maxUploadBytes = 1_000_000,
-    )
+    ).router
     val server = createServer(0, router)
     server.start()
     try {

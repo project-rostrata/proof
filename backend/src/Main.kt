@@ -24,12 +24,16 @@ import proof.fs.cacheRoot
 import proof.fs.tmpRoot
 import proof.image.Rendition
 import proof.image.Renditions
+import proof.index.Locks
+import proof.index.Reconciler
 import java.net.InetSocketAddress
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.logging.Level
 import java.util.logging.Logger
 
 private val logger = Logger.getLogger("proof")
@@ -56,6 +60,9 @@ fun main() {
     // The default covers the HTTP pool plus headroom for the background work later phases add.
     val dbPoolSize = (System.getenv("PROOF_DB_POOL_SIZE") ?: "10").toInt()
     val maxUploadBytes = (System.getenv("PROOF_MAX_UPLOAD_BYTES") ?: "100000000").toLong()
+    // The backstop reconciliation pass (index/Reconciler.kt). Opening a project already reconciles
+    // it, so this only catches what nobody has looked at. 0 turns it off.
+    val reconcileIntervalMinutes = (System.getenv("PROOF_RECONCILE_INTERVAL_MINUTES") ?: "15").toLong()
 
     Files.createDirectories(dataRoot)
     clearTmp(tmpRoot(dataRoot))
@@ -63,7 +70,7 @@ fun main() {
     pool.use { connection -> MigrationRunner(connection, migrationsDir).run() }
     val database = Database(pool)
 
-    val router = buildRouter(
+    val app = buildApp(
         frontendDir = frontendDir,
         dataRoot = dataRoot,
         database = database,
@@ -72,14 +79,19 @@ fun main() {
         authConfig = authConfig,
         maxUploadBytes = maxUploadBytes,
     )
-    val server = createServer(port, router)
+    val server = createServer(port, app.router)
     server.start()
+    if (reconcileIntervalMinutes > 0) scheduleReconciliation(app.reconciler, reconcileIntervalMinutes)
     Runtime.getRuntime().addShutdownHook(Thread { server.stop(1) })
 
     logger.info("proof listening on port ${server.address.port}")
 }
 
-fun buildRouter(
+// Everything the server runs, wired once: the router for requests, and the reconciler the
+// background pass shares with them.
+data class App(val router: Router, val reconciler: Reconciler)
+
+fun buildApp(
     frontendDir: Path,
     dataRoot: Path,
     database: Database,
@@ -87,17 +99,19 @@ fun buildRouter(
     renditionExecutor: ExecutorService,
     authConfig: AuthConfig,
     maxUploadBytes: Long,
-): Router {
+): App {
     val users = UserRepository(database)
     val sessions = SessionRepository(database)
     val projects = ProjectRepository(database)
     val photos = PhotoRepository(database)
+    val locks = Locks()
+    val reconciler = Reconciler(dataRoot, users, projects, photos, renditions, locks)
 
     val staticFileHandler = StaticFileHandler(frontendDir)
-    val projectsHandler = ProjectsHandler(projects, photos, renditions, dataRoot)
+    val projectsHandler = ProjectsHandler(projects, photos, renditions, dataRoot, locks, reconciler)
     val locator = PhotoLocator(photos, dataRoot)
-    val photosHandler = PhotosHandler(projects, photos, locator, renditions, renditionExecutor, dataRoot, maxUploadBytes)
-    val editsHandler = EditsHandler(photos, locator, renditions, renditionExecutor, dataRoot, maxUploadBytes)
+    val photosHandler = PhotosHandler(projects, photos, locator, renditions, renditionExecutor, dataRoot, maxUploadBytes, locks, reconciler)
+    val editsHandler = EditsHandler(photos, locator, renditions, renditionExecutor, dataRoot, maxUploadBytes, locks)
     val registerHandler = RegisterHandler(users, sessions, dataRoot, authConfig)
     val loginHandler = LoginHandler(users, sessions, authConfig)
     val logoutHandler = LogoutHandler(sessions, authConfig.secureCookies)
@@ -124,7 +138,23 @@ fun buildRouter(
     router.put("/api/photos/:photoId/edit", requireAuth(sessions, users, editsHandler::put))
     router.delete("/api/photos/:photoId/edit", requireAuth(sessions, users, editsHandler::delete))
     router.serveStatic(staticFileHandler::serve)
-    return router
+    return App(router, reconciler)
+}
+
+// The first pass runs a minute after startup, to catch anything changed while proof was down, then
+// at the interval. One thread: a pass never overlaps the next one.
+private fun scheduleReconciliation(reconciler: Reconciler, intervalMinutes: Long) {
+    val scheduler = Executors.newSingleThreadScheduledExecutor { task -> Thread(task, "proof-reconcile").apply { isDaemon = true } }
+    scheduler.scheduleWithFixedDelay(
+        {
+            try {
+                reconciler.reconcileEveryone()
+            } catch (e: Exception) {
+                logger.log(Level.SEVERE, "reconciliation pass failed", e) // an escaped exception would cancel the schedule
+            }
+        },
+        60, intervalMinutes * 60, TimeUnit.SECONDS,
+    )
 }
 
 // Bounded pool of plain blocking handlers (AGENTS.md "Concurrency"). Port 0 binds an ephemeral port

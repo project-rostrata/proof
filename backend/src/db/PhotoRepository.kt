@@ -10,7 +10,7 @@ private const val PHOTO_COLUMNS = """
     ph.id, ph.project_id, ph.filename, ph.size_bytes, ph.mtime, ph.content_sha256, ph.width, ph.height,
     ph.orientation, ph.capture_time, ph.capture_offset, ph.camera_make, ph.camera_model, ph.lens,
     ph.focal_length_mm, ph.f_number, ph.exposure_time_s, ph.iso, ph.rating, ph.flag,
-    ph.has_edit, ph.edit_mtime
+    ph.has_edit, ph.edit_mtime, ph.sidecar_mtime
 """
 
 class PhotoRepository(private val database: Database) {
@@ -91,27 +91,68 @@ class PhotoRepository(private val database: Database) {
         return counts
     }
 
-    fun updateCull(id: UUID, rating: Int, flag: String) {
+    // The cull state as the sidecar now holds it, and that sidecar's mtime (null: there's no sidecar).
+    fun updateCull(id: UUID, rating: Int, flag: String, sidecarMtime: java.time.Instant?) {
         database.update(
-            "UPDATE photos SET rating = ?, flag = ? WHERE id = ?",
+            "UPDATE photos SET rating = ?, flag = ?, sidecar_mtime = ? WHERE id = ?",
             bind = { stmt ->
                 stmt.setInt(1, rating)
                 stmt.setString(2, flag)
+                stmt.setTimestamp(3, sidecarMtime?.let(Timestamp::from))
+                stmt.setObject(4, id)
+            },
+        )
+    }
+
+    // recipeVersion is null when a recipe found on disk can't be read (reconciliation).
+    fun updateEdit(id: UUID, editMtime: java.time.Instant, recipeVersion: Int?) {
+        database.update(
+            "UPDATE photos SET has_edit = true, edit_mtime = ?, recipe_version = ? WHERE id = ?",
+            bind = { stmt ->
+                stmt.setTimestamp(1, Timestamp.from(editMtime))
+                stmt.setObject(2, recipeVersion, Types.INTEGER)
                 stmt.setObject(3, id)
             },
         )
     }
 
-    fun updateEdit(id: UUID, editMtime: java.time.Instant, recipeVersion: Int) {
+    // The original was replaced on disk (reconciliation): everything read from the file is re-read.
+    fun updateOriginal(id: UUID, photo: NewPhoto) {
         database.update(
-            "UPDATE photos SET has_edit = true, edit_mtime = ?, recipe_version = ? WHERE id = ?",
+            """
+            UPDATE photos SET size_bytes = ?, mtime = ?, content_sha256 = ?, width = ?, height = ?, orientation = ?,
+                capture_time = ?, capture_offset = ?, camera_make = ?, camera_model = ?, lens = ?,
+                focal_length_mm = ?, f_number = ?, exposure_time_s = ?, iso = ?
+            WHERE id = ?
+            """.trimIndent(),
             bind = { stmt ->
-                stmt.setTimestamp(1, Timestamp.from(editMtime))
-                stmt.setInt(2, recipeVersion)
-                stmt.setObject(3, id)
+                stmt.setLong(1, photo.sizeBytes)
+                stmt.setTimestamp(2, Timestamp.from(photo.mtime))
+                stmt.setString(3, photo.contentSha256)
+                stmt.setInt(4, photo.width)
+                stmt.setInt(5, photo.height)
+                stmt.setInt(6, photo.orientation)
+                stmt.setObject(7, photo.captureTime, Types.TIMESTAMP)
+                stmt.setString(8, photo.captureOffset)
+                stmt.setString(9, photo.cameraMake)
+                stmt.setString(10, photo.cameraModel)
+                stmt.setString(11, photo.lens)
+                stmt.setNullableDouble(12, photo.focalLengthMm)
+                stmt.setNullableDouble(13, photo.fNumber)
+                stmt.setNullableDouble(14, photo.exposureTimeS)
+                stmt.setObject(15, photo.iso, Types.INTEGER)
+                stmt.setObject(16, id)
             },
         )
     }
+
+    fun delete(id: UUID) {
+        database.update("DELETE FROM photos WHERE id = ?", bind = { it.setObject(1, id) })
+    }
+
+    // Every photo in a project, unfiltered, for reconciliation.
+    fun listAll(projectId: UUID): List<PhotoRow> =
+        database.queryList("SELECT $PHOTO_COLUMNS FROM photos ph WHERE ph.project_id = ?", bind = { it.setObject(1, projectId) }, mapRow = ::toRow)
 
     fun clearEdit(id: UUID) {
         database.update("UPDATE photos SET has_edit = false, edit_mtime = NULL, recipe_version = NULL WHERE id = ?", bind = { it.setObject(1, id) })
@@ -157,6 +198,7 @@ class PhotoRepository(private val database: Database) {
         flag = rs.getString("flag"),
         hasEdit = rs.getBoolean("has_edit"),
         editMtime = rs.getTimestamp("edit_mtime")?.toInstant(),
+        sidecarMtime = rs.getTimestamp("sidecar_mtime")?.toInstant(),
     )
 }
 

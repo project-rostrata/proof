@@ -8,6 +8,20 @@ import java.nio.file.Path
 import java.security.MessageDigest
 import java.util.HexFormat
 
+// SHA-256 of a file already on disk (reconciliation's equivalent of the hash taken while receiving).
+fun sha256Of(file: Path): String {
+    val digest = MessageDigest.getInstance("SHA-256")
+    Files.newInputStream(file).use { input ->
+        val buffer = ByteArray(64 * 1024)
+        while (true) {
+            val n = input.read(buffer)
+            if (n < 0) break
+            digest.update(buffer, 0, n)
+        }
+    }
+    return HexFormat.of().formatHex(digest.digest())
+}
+
 sealed class Received {
     data class File(val path: Path, val sizeBytes: Long, val sha256: String, val type: ImageType) : Received()
     data object TooLarge : Received()

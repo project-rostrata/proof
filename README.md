@@ -4,8 +4,8 @@ A small, self-hosted photo editor that runs in your browser. Upload a batch of p
 the way you'd mark up a contact sheet, then edit the keepers with Snapseed-style tools on a
 non-destructive stack.
 
-> **Status: v1 feature-complete except export.** Export (Phase 12) is deferred, and so is
-> reconciliation of changes made outside the app (Phase 6). See [`V1_PLAN.md`](V1_PLAN.md).
+> **Status: v1 feature-complete except export.** Export (Phase 12) is deferred. See
+> [`V1_PLAN.md`](V1_PLAN.md).
 
 ## Why
 
@@ -59,7 +59,13 @@ Then open http://localhost:8080 and register. See [`docs/deployment.md`](docs/de
 the settings that matter before using it for real (the database password, `PROOF_SECURE_COOKIES`,
 `PUID`/`PGID`, and where your photos live), and for the single-container standalone image.
 
-Photos live on disk in their normal form, so they're easy to back up and to reach over SMB:
+Photos live on disk in their normal form, so they're easy to back up and to reach over SMB. proof
+picks up changes made there:
+- photos or whole project folders copied in, renamed, or deleted;
+- ratings changed by darktable or Lightroom.
+
+It checks when you open a page, and in the background every 15 minutes.
+
 
 ```
 <data>/<user>/<project>/originals/IMG_0001.jpg      never modified

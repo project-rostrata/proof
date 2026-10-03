@@ -474,3 +474,56 @@ Checked in headless Chrome:
 - the footer sits at the bottom of the viewport;
 - Enter after a click opens the loupe without toggling again;
 - the loupe stays dark under the light theme.
+
+## 2026-10-03 — Phase 6: reconciliation
+
+The human asked for the skipped phase. With it, the "files are the truth" promise in the brief now holds in both directions: whatever is put in, changed in, or taken out of the project tree outside the app shows up in proof.
+
+**Shape: shelf's design, written for proof's layout.**
+- **Kept from shelf:** a pure planner (unit-tested), I/O glue around it, a backstop pass on a `ScheduledExecutorService`, and path safety.
+- **Not ported:** shelf's general recursive file-tree code. It solves a harder problem (arbitrary depth, per-directory freshness with an EPOCH sentinel), and its comments record two real bugs that problem caused. proof's tree is fixed at three levels (user, project, `originals/` and `edits/`), so it doesn't need any of that.
+
+**No directory-freshness skip.** Opening a project lists `originals/` and stats each file, every time. That costs about a millisecond per hundred photos. shelf's skip-if-the-directory-mtime-is-unchanged trick wouldn't even be correct here: replacing a file in place, or darktable rewriting a sidecar in place, doesn't change the directory's mtime.
+
+**What triggers it, and why there's no refresh button.**
+- Opening the projects list reconciles the set of project folders. Photos in a newly found folder are indexed straight away, so it appears with its count and cover.
+- Opening a project reconciles its photos.
+- A backstop pass runs every `PROOF_RECONCILE_INTERVAL_MINUTES` (default 15), first a minute after startup, to catch what nobody has opened.
+
+Reloading the page is the refresh, so the plan's manual "refresh" isn't needed: only what's necessary.
+
+**What it reconciles, and how:**
+- **New originals** are indexed only if their magic bytes say JPEG or PNG and match the extension, and the image decodes (the same rules as upload). Their sidecar's cull state and any saved edit in `edits/` are read in.
+- **Replaced originals** (size or mtime differs) are re-read, and their cached renditions dropped. **Deleted ones** lose their row and cache.
+- **Sidecars** are tracked by a new `photos.sidecar_mtime` (migration 0004):
+  - a sidecar that appears or changes is re-read, which fixes the Phase 7 gap where darktable's rating didn't show;
+  - a deleted sidecar resets the cull state, because the sidecar is the truth;
+  - an unparseable one is left alone, in both the file and the index;
+  - proof's own cull writes record the new mtime, so they aren't re-read.
+- **Edits** count only when both the render and its recipe exist. An unreadable recipe is indexed with no version, and reopening it reports the problem.
+- **Project folders** are matched by name. A folder renamed outside the app becomes one project removed and one added. Its photos get new ids, but nothing is lost: ratings live in the sidecars and edits in `edits/`.
+- **Never indexed:** symlinks (so no link can lead the index outside the user's folder), hidden files (which includes proof's own temp files), and invalid names.
+- **Unmounted storage:** a missing user folder is skipped, never taken to mean every project was deleted.
+
+**Two traps, both handled:**
+- **Timestamp precision.** Postgres stores microseconds and Linux file times have nanoseconds. Compared raw, every file would look changed on every pass, and the whole library would be re-hashed each time. Every mtime that enters the index now goes through `fs/FileTimes.kt`.
+- **Racing the request handlers.** Before this, an upload moved the file into `originals/`, then inserted the row, then deleted the file again if the insert failed. A scan between the move and the insert would index the file, and the upload's insert would then fail with a duplicate and delete the file the index now pointed at.
+  - **The fix:** one locking scheme, `index/Locks.kt`. Striped user locks guard project set changes, and striped project locks guard a project's photos. When both are needed, the user lock comes first.
+  - **Who takes them:** upload (name check, move, and insert), cull (which replaced its own photo-striped locks), edit commit and revert, project create, rename, and delete, and reconciliation all take the same locks.
+  - **Keeping the holds short:** reconciliation hashes and decodes new files *before* locking, then re-lists and re-plans under the lock, using that work only for files whose size and mtime haven't changed since.
+
+**Two bugs found and fixed along the way:**
+- **An upload could overwrite a file it didn't know about.** `ATOMIC_MOVE` is `rename(2)`, which silently replaces an existing file, so the old `FileAlreadyExistsException` catch never fired. An upload named like a photo copied in over SMB, but not yet indexed, would have destroyed it. The upload now checks under the project lock and returns 409.
+- **Two edit saves could both pass the `?base=` check.** The check ran before receiving the body, with nothing holding it. It's now repeated under the project lock, right before the commit.
+
+**Checked:**
+- 109 backend tests pass, including the new planner and timestamp tests.
+- An end-to-end script on Postgres 18.6:
+  - copied-in photos, junk, hidden, and symlinked files;
+  - a darktable-rated sidecar, and an unparseable one;
+  - a whole project folder copied in with a reject flag and a saved edit, then renamed outside the app;
+  - a recipe deleted by hand, and an unmounted user folder;
+  - an upload over an unindexed file, which was refused with the file intact;
+  - repeat views logging nothing.
+- A contention run: 30 uploads, 15 files copied in mid-run, 40 views, and 40 culls, all at once. Every request returned 200, all 45 photos were indexed, every upload was byte-identical, and there were no warnings.
+- The backstop pass indexed a new photo and a new project folder after one minute with no page views.
