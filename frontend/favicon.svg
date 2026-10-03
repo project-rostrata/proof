@@ -1,0 +1,9 @@
+<!-- A 2x2 contact sheet: four frames, one marked with the safelight accent as the pick. The colours
+     are hard-coded because a favicon can't reach CSS custom properties. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <rect x="2" y="2" width="20" height="20" rx="3" fill="#1A1A1A"/>
+  <rect x="4.5" y="4.5" width="6.5" height="6.5" rx="1" fill="#9E9E9E"/>
+  <rect x="13" y="4.5" width="6.5" height="6.5" rx="1" fill="#E8A13A"/>
+  <rect x="4.5" y="13" width="6.5" height="6.5" rx="1" fill="#9E9E9E"/>
+  <rect x="13" y="13" width="6.5" height="6.5" rx="1" fill="#9E9E9E"/>
+</svg>

@@ -158,3 +158,11 @@ Snapseed sets the UX: which sliders exist, with −100…+100 ranges and a gentl
 **Half-float is required, with no 8-bit fallback.** Every target browser exposed `EXT_color_buffer_float`. A browser without it gets an "unsupported browser" message.
 
 **The raw results JSON wasn't kept** (at the human's request). Its numbers are recorded in the entries above.
+
+## 2026-10-02 — Phase 2 scaffolding choices
+
+- **The mini-gl seed is committed verbatim first and changed afterwards.** The four kept upstream files go into `frontend/src/pipeline/minigl/` byte-for-byte from commit `28238857`, with only a provenance header added. Phase 8's restructuring (into `gl.js`/`runner.js`, half-float) then shows up in history as reviewable diffs against the upstream code, not as an unexplained rewrite. Until then, `minigl.js` still imports mini-gl's `minigl_filters.js`, which was deliberately excluded, so nothing loads these files yet.
+- **Third-party notices live in `frontend/src/pipeline/LICENSES.md`**, holding both MIT texts in full (mini-gl, and glfx.js, which mini-gl derives from) plus a darktable section. A short "Third-party code" section in the README points to it.
+- **Dependencies:** the same three pre-approved jars and pinned versions as `shelf` and `larder` (Postgres JDBC 42.7.13, kotlinx-serialization core/json 1.11.0), fetched and sha1-verified by `backend/lib/fetch-deps.sh`, and never committed. VanJS 1.6.1 was checked byte-identical to upstream (`vanjs-org/van` `public/van-1.6.1.js`, sha1 `8847b4b6…`).
+- **`TestMain.kt` was pulled forward from Phase 3**, so `backend/test.sh` works from the first commit (with 0 tests).
+- **The UI palette is strictly neutral grey with one safelight-amber accent.** Photo-editing UIs keep the chrome colourless, because a tinted surround biases how colour in the photo is judged. So, unlike the siblings' tinted palettes, every grey has equal R, G, and B. The accent is never placed behind a photo. Dark is the default, and light mode is supported, as in the siblings.

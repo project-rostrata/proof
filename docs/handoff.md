@@ -32,6 +32,10 @@ All of these are recorded in `PROJECT_BRIEF.md` §4 and `decisions.md`.
 - **Provenance audit done** (`decisions.md`). Several mini-gl filters cite Shadertoy (CC BY-NC-SA by default), a 2014 Stack Overflow answer (CC BY-SA 3.0), or Pintura (proprietary). Only the GL core, runner, spline, perspective, and matrix transform can be carried over. All pixel filters get written fresh.
 - **Phase 1 closed (2026-10-02).** The human confirmed the narrow fork and said to take filters from darktable. Safari and iPad are out of scope for v1, and the targets are Firefox and Chromium on desktop and Android. The raw results JSON was not kept, because the numbers are in `decisions.md`.
 
+## Phase 2 status (2026-10-02)
+
+Scaffolding is done (see `architecture.md`). The backend builds, runs, and tests (0 tests) with bare `kotlinc` 2.4.20 on JDK 25. The jars are fetched and verified. The frontend shell renders (checked in headless Chrome). The mini-gl seed is committed verbatim, with license notices.
+
 ## Next step
 
-Phase 2 (scaffolding, `V1_PLAN.md`). The spike was committed in `b71f680` and removed in the next commit. Use `git show b71f680 -- spike/` to see it, including the pinned upstream mini-gl files that Phase 2 copies the kept pieces from.
+Phase 3 (backend skeleton: router, `ApiResult`, health endpoint, and static file handler, reused from `shelf`). The spike was committed in `b71f680` and removed in the next commit. Use `git show b71f680 -- spike/` to see it, including the pinned upstream mini-gl files that Phase 2 copies the kept pieces from.

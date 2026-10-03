@@ -32,7 +32,17 @@ Safari and iPad are out of scope for v1. The original measurement brief is kept 
 
 Record the findings in `docs/decisions.md`, with numbers, before Phase 2. If a target device fails here, stop and bring it to the human. Either the device list or tiled rendering (brief §6, v2) gets reconsidered.
 
-## Phase 2 — Repo scaffolding
+## Phase 2 — Repo scaffolding — DONE
+
+Built as laid out below, with three differences:
+- `TestMain.kt` was pulled forward from Phase 3 so that `test.sh` runs from the start.
+- `docker/` stays in Phase 13 and `frontend/test/pipeline.html` stays in Phase 8. Neither has
+  anything to hold yet.
+- The pipeline is seeded with the four kept mini-gl files, copied **verbatim** into
+  `frontend/src/pipeline/minigl/` with provenance headers. They get restructured in Phase 8, so
+  proof's changes appear as diffs.
+
+See `docs/architecture.md`.
 
 ```
 proof/
@@ -62,7 +72,7 @@ Reuse `shelf`'s pattern directly rather than redesigning it.
 - `Router.kt` and `ApiResult.kt` (the `Ok`/`Err` sealed result and the `{"error":{"code":...,"message":...}}` envelope), copied from `shelf` with the package renamed.
 - `GET /api/health` returning `{"status":"ok"}`.
 - A static file handler for `frontend/`.
-- `TestMain.kt`, the hand-rolled reflective test runner.
+- (`TestMain.kt`, the hand-rolled reflective test runner, already landed in Phase 2.)
 
 ## Phase 4 — Database, migrations, auth
 

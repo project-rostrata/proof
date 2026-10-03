@@ -1,0 +1,63 @@
+/* proof's UI greys are strictly neutral (equal R, G and B, with no warm or cool tint). Photo
+   editors keep the chrome colourless because tinted surroundings shift how colour in the photo
+   is judged. The one accent is a darkroom-safelight amber, used sparingly for interactive state
+   and never behind a photo. Dark mode is the default, and light mode is supported, as in the
+   sibling projects. System fonts only: a self-hosted app shouldn't phone home to a font CDN
+   (same reasoning as shelf). */
+
+:root {
+  color-scheme: dark;
+
+  --bg: #121212;
+  --surface: #1A1A1A;
+  --card: #222222;
+  --border: rgba(255,255,255,0.08);
+  --border-strong: rgba(255,255,255,0.16);
+
+  --text-primary: #EBEBEB;
+  --text-secondary: #9E9E9E;
+  --text-tertiary: #6E6E6E;
+
+  --accent: #E8A13A;
+  --accent-hover: #F0B055;
+
+  --danger: #D0584B;
+
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Roboto, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Consolas, "Liberation Mono", monospace;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    color-scheme: light;
+
+    --bg: #EDEDED;
+    --surface: #E4E4E4;
+    --card: #FFFFFF;
+    --border: rgba(0,0,0,0.08);
+    --border-strong: rgba(0,0,0,0.18);
+
+    --text-primary: #1C1C1C;
+    --text-secondary: #616161;
+    --text-tertiary: #8F8F8F;
+
+    --accent: #A86400;
+    --accent-hover: #8C5300;
+
+    --danger: #A83B2F;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text-primary);
+  font: 14px/1.5 var(--font-sans);
+}
+
+.scaffold { max-width: 40rem; margin: 4rem auto; padding: 0 16px; }
+.scaffold h1 { margin: 0 0 0.25rem; font-size: 1.5rem; }
+.scaffold h1::first-letter { color: var(--accent); }
+.scaffold p { margin: 0; color: var(--text-secondary); }

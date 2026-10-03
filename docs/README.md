@@ -7,7 +7,8 @@ Keep this page short. It's an index, not a place to write things up, so put dept
 - **[../PROJECT_BRIEF.md](../PROJECT_BRIEF.md)**: the original spec, covering non-negotiable constraints, architecture, rationale, and phasing. Read this first.
 - **[../V1_PLAN.md](../V1_PLAN.md)**: the phased build plan derived from the brief, starting with the WebGL2 spike.
 - **[../AGENTS.md](../AGENTS.md)**: coding conventions, including the pipeline rules and the narrow dumb-UI exception. Read this before writing any code.
+- **[architecture.md](architecture.md)**: living doc covering what's actually built right now.
 - **[decisions.md](decisions.md)**: an append-only log of decisions and the reasons for them.
 - **[handoff.md](handoff.md)**: ephemeral session-to-session state.
 
-`architecture.md` and `deployment.md` get added once there's something built to describe.
+`deployment.md` gets added with the Docker image (Phase 13).

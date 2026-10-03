@@ -1,0 +1,3 @@
+postgresql-42.7.13.jar  a6e1bd21b412d6ffb3df23cd13d507bc2cc9e37d  https://repo1.maven.org/maven2/org/postgresql/postgresql/42.7.13/postgresql-42.7.13.jar
+kotlinx-serialization-core-jvm-1.11.0.jar  c1905c9bf7452b045d5af9248835abe64ddad6bf  https://repo1.maven.org/maven2/org/jetbrains/kotlinx/kotlinx-serialization-core-jvm/1.11.0/kotlinx-serialization-core-jvm-1.11.0.jar
+kotlinx-serialization-json-jvm-1.11.0.jar  e7e045e99e56f07599bb9ccb708c2190e2af0606  https://repo1.maven.org/maven2/org/jetbrains/kotlinx/kotlinx-serialization-json-jvm/1.11.0/kotlinx-serialization-json-jvm-1.11.0.jar

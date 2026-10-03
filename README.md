@@ -28,6 +28,14 @@ in a plain `edits/` folder. PostgreSQL is only an index over those files.
 - [`docs/decisions.md`](docs/decisions.md): an append-only log of design decisions and why they were made
 - [`AGENTS.md`](AGENTS.md): coding conventions for anyone (human or AI) working on the code
 
+## Third-party code
+
+- [VanJS](https://github.com/vanjs-org/van) 1.6.1 (MIT), vendored in `frontend/lib/`.
+- The edit pipeline's GL core and geometry come from [mini-gl](https://github.com/xdadda/mini-gl)
+  (MIT), which is derived from [glfx.js](https://github.com/evanw/glfx.js) (MIT). Its filters are
+  ported from [darktable](https://github.com/darktable-org/darktable) (GPL-3.0-or-later). See
+  [`frontend/src/pipeline/LICENSES.md`](frontend/src/pipeline/LICENSES.md) for the full notices.
+
 ## License
 
 Copyright (C) 2026 Casey Watson.
