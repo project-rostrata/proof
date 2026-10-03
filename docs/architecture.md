@@ -98,7 +98,7 @@ A sidecar that can't be parsed returns 409 `SIDECAR_UNREADABLE` and is never ove
 - **Per-photo state:** each photo is its own `van.state`. A cull change re-renders that frame's badges and class only, and the static parts are read through `rawVal`, so `<img>` nodes are never re-created.
 - **Keyboard (`src/cull.js`):** 0–5, P/X/U, 6–9 label toggle, arrows (up/down by the laid-out column count), Enter/Space opens the loupe, Esc closes it. Updates are optimistic, then replaced by the server's photo, and reverted on error.
 - **Filter state:** the filter lives in the URL (`?project=&view=&minRating=`).
-- **Loupe:** a full-screen 2048 px preview on a neutral surround, with the neighbouring previews preloaded. Its bar has clickable culling (`components/CullControls.js`): Pick/Reject toggles, stars (clicking the current rating clears it), and colour labels. They call the same `cull()` as the keyboard and never take focus, so the keys keep working after a click.
+- **Loupe:** a full-screen 2048 px preview on a neutral surround, on a strip with the neighbouring previews either side (so they're loaded before they're needed). On touch, a one-finger horizontal swipe drags the strip and moves to the next or previous photo; pinch-zoom is left to the browser, and while zoomed, drags pan instead of swiping. Its bar has clickable culling (`components/CullControls.js`): Pick/Reject toggles, stars (clicking the current rating clears it), and colour labels. They call the same `cull()` as the keyboard and never take focus, so the keys keep working after a click.
 
 **Earlier phases, unchanged:**
 - auth (Phase 4): shelf-style accounts and `proof_session` cookies;

@@ -226,7 +226,16 @@ label.btn-primary { position: relative; }
 /* ---- loupe: the photo on a neutral surround ---- */
 
 .loupe { position: fixed; inset: 0; z-index: 40; background: #0E0E0E; display: flex; flex-direction: column; }
-.loupe-stage { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 16px 64px; }
+/* The stage shows one slide of a strip: the previous and next photos sit either side, off-screen,
+   until a swipe drags them in (components/Loupe.js). touch-action leaves pinch-zoom to the
+   browser, but takes one-finger drags for swiping (and so the page behind never scrolls). Once
+   the page is pinch-zoomed, drags pan it instead. */
+.loupe-stage { flex: 1; min-height: 0; position: relative; overflow: hidden; touch-action: pinch-zoom; user-select: none; -webkit-user-select: none; }
+:root.is-zoomed .loupe-stage { touch-action: auto; }
+.loupe-strip { position: absolute; inset: 0; }
+.loupe-slide { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 16px 64px; }
+.loupe-slide.is-prev { transform: translateX(calc(-100% - 16px)); }
+.loupe-slide.is-next { transform: translateX(calc(100% + 16px)); }
 .loupe-image { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
 .loupe-nav {
   position: absolute; top: 50%; transform: translateY(-50%); width: 44px; height: 64px; border-radius: 6px;
@@ -274,7 +283,7 @@ label.btn-primary { position: relative; }
 
 @media (max-width: 800px) {
   .key-help { display: none; }
-  .loupe-stage { padding: 8px; }
+  .loupe-slide { padding: 8px; }
   .loupe-nav { display: none; }
   .loupe-keys { display: none; }
   .loupe-info { flex-wrap: wrap; gap: 10px; }

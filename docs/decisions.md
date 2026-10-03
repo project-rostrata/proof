@@ -367,3 +367,27 @@ Checked with real mouse events in headless Chrome:
 - a second click on Pick or the current star clears it;
 - Enter after a click changes nothing;
 - focus stays on `body`, and the arrows and `3`/`P` keep working.
+
+## 2026-10-03 — Swiping between photos in the loupe
+
+On phones the loupe hid its ‹ › buttons and there's no keyboard, so there was no way to move to the next photo. A one-finger horizontal swipe now does it, and the photo follows the finger.
+
+**How it works:**
+- The loupe renders a three-slide strip: the previous, current, and next previews, the neighbours off-screen either side. This replaces the `<link rel="preload">` tags, which did the same preloading, and it means the incoming photo is visible while dragging.
+- Letting go past a fifth of the width, or with a flick (above 0.4 px/ms and 30 px), animates the rest of the way and steps. Anything less springs back. Past the first or last photo the drag moves at a third of the finger's speed and never steps.
+- The drag offset is written to the strip's style directly, not to van state, because it's per-frame presentation that nothing else reads. `prefers-reduced-motion` skips the animations.
+
+**Gestures it doesn't take over:**
+- **Touch and pen only.** A mouse drag does nothing, because desktop has the arrow keys and the buttons.
+- **Vertical drags do nothing.** The stage's `touch-action: pinch-zoom` also stops the contact sheet behind from scrolling.
+- **Pinch-zoom stays the browser's**, so you can still zoom in to check focus. While the page is zoomed (`visualViewport.scale > 1`), swipes are ignored and `touch-action` is relaxed, so one finger pans the zoomed view.
+- **A tap beside the photo still closes the loupe.** A click that arrives within 400 ms of a swipe is ignored.
+
+Checked with emulated touch at phone size in headless Chrome:
+- swipes step both ways, and stop at both ends;
+- a slow short drag springs back, and a fast short flick steps;
+- vertical drags, mouse drags, and swipes while zoomed are ignored, and swipes work again after zooming out;
+- rating then swiping saves the rating to the right photo;
+- a tap above the photo closes the loupe.
+
+The desktop arrow keys and buttons are unchanged.
