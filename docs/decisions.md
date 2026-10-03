@@ -339,3 +339,12 @@ The human asked for the remaining phases to be done in one go, skipping Phase 12
   - debanding for strong shadow lifts on 8-bit sources (Phase 8 known limitation);
   - a free-corner Perspective mode (Phase 9);
   - tiled rendering for photos larger than the GPU's maximum texture size (v2).
+
+## 2026-10-03 — The accent is the house American eel green, not amber
+
+This reverses the Phase 2 palette entry. Phase 2 gave proof its own "darkroom safelight" amber accent. That was a mistake: shelf, press, and larder share one accent, the olive/yellow-green inspired by the American eel (*Anguilla rostrata*), and the human wants proof to match. proof now uses the siblings' exact tokens:
+- `--accent-fill: #5E7A32` for filled buttons, with white text;
+- `--accent-fill-hover: #6D8C3C`, or `#4C6428` in light mode;
+- `--accent-on-surface: #93B558` for text, borders, focus, and selection on dark backgrounds, or `#4C6428` in light mode.
+
+The favicon's pick frame is green too. What stays from Phase 2 are the strictly neutral greys (equal R, G, and B), which is a photo-editing requirement rather than a branding choice: a tinted surround shifts how colour in a photo is judged.

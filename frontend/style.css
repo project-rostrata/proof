@@ -1,9 +1,9 @@
-/* proof's UI greys are strictly neutral (equal R, G and B, with no warm or cool tint). Photo
-   editors keep the chrome colourless because tinted surroundings shift how colour in the photo
-   is judged. The one accent is a darkroom-safelight amber, used sparingly for interactive state
-   and never behind a photo. Dark mode is the default, and light mode is supported, as in the
-   sibling projects. System fonts only: a self-hosted app shouldn't phone home to a font CDN
-   (same reasoning as shelf). */
+/* proof uses the house accent shared by shelf, press and larder: one olive/yellow-green,
+   inspired by the American eel (Anguilla rostrata). The values are identical to shelf's tokens.
+   Unlike the siblings, the UI greys are strictly neutral (equal R, G and B): a tinted surround
+   shifts how colour in a photo is judged, and the accent is never placed behind a photo. Dark
+   mode is the default, and light mode is supported. System fonts only: a self-hosted app
+   shouldn't phone home to a font CDN (same reasoning as shelf). */
 
 :root {
   color-scheme: dark;
@@ -18,8 +18,9 @@
   --text-secondary: #9E9E9E;
   --text-tertiary: #6E6E6E;
 
-  --accent: #E8A13A;
-  --accent-hover: #F0B055;
+  --accent-fill: #5E7A32;
+  --accent-fill-hover: #6D8C3C;
+  --accent-on-surface: #93B558;
 
   --danger: #D0584B;
 
@@ -41,8 +42,9 @@
     --text-secondary: #616161;
     --text-tertiary: #8F8F8F;
 
-    --accent: #A86400;
-    --accent-hover: #8C5300;
+    --accent-fill: #5E7A32;
+    --accent-fill-hover: #4C6428;
+    --accent-on-surface: #4C6428;
 
     --danger: #A83B2F;
   }
@@ -65,7 +67,7 @@ body {
 }
 
 button, input { font: inherit; color: inherit; }
-a { color: var(--accent); text-decoration: none; }
+a { color: var(--accent-on-surface); text-decoration: none; }
 a:hover { text-decoration: underline; }
 h1 { margin: 0; font-size: 20px; font-weight: 600; }
 
@@ -80,13 +82,13 @@ h1 { margin: 0; font-size: 20px; font-weight: 600; }
   padding: 0 16px; border-bottom: 1px solid var(--border);
 }
 .wordmark { font: 600 16px var(--font-sans); color: var(--text-primary); letter-spacing: .01em; }
-.wordmark::first-letter { color: var(--accent); }
+.wordmark::first-letter { color: var(--accent-on-surface); }
 .wordmark:hover { text-decoration: none; }
 .top-bar-user { display: flex; align-items: center; gap: 12px; }
 .username { color: var(--text-secondary); font-size: 13px; }
 
 .page { width: 100%; max-width: 1400px; margin: 0 auto; padding: 20px 16px 48px; flex-grow: 1; }
-.page.is-dragging { outline: 2px dashed var(--accent); outline-offset: -8px; }
+.page.is-dragging { outline: 2px dashed var(--accent-on-surface); outline-offset: -8px; }
 .page-header { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
 .page-title { display: flex; align-items: baseline; gap: 10px; margin-right: auto; min-width: 0; }
 .page-title h1 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -99,8 +101,8 @@ h1 { margin: 0; font-size: 20px; font-weight: 600; }
   min-height: 40px; padding: 0 14px; border-radius: 6px; cursor: pointer; font-weight: 500;
   transition: background-color .12s ease, border-color .12s ease; white-space: nowrap;
 }
-.btn-primary { background: var(--accent); border: 1px solid var(--accent); color: #141414; }
-.btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+.btn-primary { background: var(--accent-fill); border: 1px solid var(--accent-fill); color: #FFFFFF; }
+.btn-primary:hover { background: var(--accent-fill-hover); border-color: var(--accent-fill-hover); }
 .btn-ghost { background: none; border: 1px solid var(--border-strong); color: var(--text-primary); }
 .btn-ghost:hover { background: var(--card); }
 .btn-small { min-height: 32px; padding: 0 10px; font-size: 13px; }
@@ -114,7 +116,7 @@ label.btn-primary { position: relative; }
   width: 100%; min-height: 40px; padding: 8px 12px; border-radius: 6px;
   background: var(--bg); border: 1px solid var(--border-strong); color: var(--text-primary);
 }
-.field-input:focus { outline: none; border-color: var(--accent); }
+.field-input:focus { outline: none; border-color: var(--accent-on-surface); }
 
 /* ---- auth ---- */
 
@@ -125,7 +127,7 @@ label.btn-primary { position: relative; }
 }
 .auth-brand { display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .auth-wordmark { font-size: 22px; font-weight: 600; }
-.auth-wordmark::first-letter { color: var(--accent); }
+.auth-wordmark::first-letter { color: var(--accent-on-surface); }
 .auth-subtitle { color: var(--text-secondary); font-size: 13px; }
 .auth-fields { display: flex; flex-direction: column; gap: 14px; }
 .auth-switch { text-align: center; font-size: 13px; color: var(--text-secondary); }
@@ -155,7 +157,7 @@ label.btn-primary { position: relative; }
 .upload-list { display: flex; flex-direction: column; gap: 6px; max-height: 180px; overflow: auto; }
 .upload-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(120px, 2fr); gap: 12px; align-items: center; font-size: 13px; }
 .upload-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); font-size: 12px; }
-.upload-row progress { width: 100%; height: 6px; accent-color: var(--accent); }
+.upload-row progress { width: 100%; height: 6px; accent-color: var(--accent-on-surface); }
 .upload-error { color: var(--danger); }
 
 /* ---- contact sheet: uniform cells, each photo letterboxed inside its frame ---- */
@@ -195,7 +197,7 @@ label.btn-primary { position: relative; }
 .view-tab:hover { color: var(--text-primary); }
 .view-tab.is-active { background: var(--card); color: var(--text-primary); }
 .view-count { font: 11px var(--font-mono); color: var(--text-tertiary); }
-.view-tab.is-active .view-count { color: var(--accent); }
+.view-tab.is-active .view-count { color: var(--accent-on-surface); }
 .rating-filter { width: auto; min-height: 36px; padding: 4px 8px; }
 .key-help { margin-left: auto; font-size: 12px; color: var(--text-tertiary); }
 
@@ -205,7 +207,7 @@ label.btn-primary { position: relative; }
 .star { color: var(--border-strong); }
 .star.is-on { color: var(--text-primary); }
 .flag { display: inline-block; width: 14px; text-align: center; font-size: 12px; line-height: 1; }
-.flag-pick { color: var(--accent); }
+.flag-pick { color: var(--accent-on-surface); }
 .flag-reject { color: var(--danger); }
 .label-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; }
 .label-red { background: #D0584B; }
@@ -217,7 +219,7 @@ label.btn-primary { position: relative; }
 /* ---- cull: contact sheet selection and state ---- */
 
 .frame { cursor: pointer; user-select: none; }
-.frame.is-selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.frame.is-selected { border-color: var(--accent-on-surface); box-shadow: 0 0 0 1px var(--accent-on-surface); }
 .frame.is-rejected .frame-image { opacity: .3; }
 .frame-cull { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 6px; height: 14px; }
 
@@ -259,7 +261,7 @@ label.btn-primary { position: relative; }
 .tool-panel-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
 .tool-panel-head h2 { margin: 0; }
 .choice-buttons { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
-.btn-ghost.is-active { border-color: var(--accent); color: var(--accent); }
+.btn-ghost.is-active { border-color: var(--accent-on-surface); color: var(--accent-on-surface); }
 
 /* crop box: shaded outside, rule-of-thirds inside, handles on corners and edges */
 .crop-overlay, .crop-layer { position: absolute; inset: 0; touch-action: none; }
@@ -305,7 +307,7 @@ label.btn-primary { position: relative; }
 .stack-entry { display: flex; align-items: center; border-radius: 6px; }
 .stack-entry.is-active { background: rgba(255,255,255,.07); }
 .stack-select { flex: 1; text-align: left; background: none; border: none; color: inherit; padding: 7px 8px; cursor: pointer; font-size: 13px; }
-.stack-entry.is-active .stack-select { color: var(--accent); }
+.stack-entry.is-active .stack-select { color: var(--accent-on-surface); }
 .stack-remove { background: none; border: none; color: #8A8A8A; cursor: pointer; font-size: 16px; padding: 4px 10px; }
 .stack-remove:hover { color: var(--danger); }
 .tool-panel h2 { font-size: 14px; margin: 0 0 12px; }
@@ -316,7 +318,7 @@ label.btn-primary { position: relative; }
 .slider { margin-bottom: 12px; }
 .slider-head { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 2px; }
 .slider-value { font: 12px var(--font-mono); color: #9E9E9E; }
-.slider input[type=range] { width: 100%; accent-color: var(--accent); }
+.slider input[type=range] { width: 100%; accent-color: var(--accent-on-surface); }
 
 .curve-editor { display: flex; flex-direction: column; gap: 8px; }
 .curve-channels { display: flex; gap: 2px; }
@@ -335,4 +337,4 @@ label.btn-primary { position: relative; }
   .editor-panel { border-left: none; border-top: 1px solid rgba(255,255,255,.08); }
 }
 .editor-save { margin-left: auto; }
-.edited-badge { font-size: 11px; color: var(--accent); line-height: 1; }
+.edited-badge { font-size: 11px; color: var(--accent-on-surface); line-height: 1; }
