@@ -107,3 +107,21 @@ fun testProjectAndPhotoRoutesRequireASession() = withServer { base, client ->
         assertEquals(401, client.get("$base$path").statusCode(), path)
     }
 }
+
+// JSON bodies are capped, so an anonymous request can't make the server buffer a huge one.
+fun testOversizedJsonBodyIs413BeforeAnyDatabaseWork() = withServer { base, client ->
+    val body = """{"username":"casey","password":"${"x".repeat(100_000)}"}"""
+    val request = HttpRequest.newBuilder(URI.create("$base/api/login")).POST(HttpRequest.BodyPublishers.ofString(body)).build()
+    val response = client.send(request, HttpResponse.BodyHandlers.ofString())
+
+    assertEquals(413, response.statusCode())
+}
+
+fun testEveryResponseCarriesTheSecurityHeaders() = withServer { base, client ->
+    for (path in listOf("/", "/api/health", "/api/nope", "/api/me")) {
+        val headers = client.get("$base$path").headers()
+        assertEquals("nosniff", headers.firstValue("X-Content-Type-Options").orElse(null), path)
+        assertEquals("DENY", headers.firstValue("X-Frame-Options").orElse(null), path)
+        assertEquals("same-origin", headers.firstValue("Referrer-Policy").orElse(null), path)
+    }
+}

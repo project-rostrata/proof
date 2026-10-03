@@ -30,8 +30,9 @@ class RegisterHandler(
     private val config: AuthConfig,
 ) {
     fun handle(ctx: RouteContext): ApiResult<String> {
+        val body = ctx.readBody() // outside the try: an oversized body is a 413, not a parse error
         val request = try {
-            Json.decodeFromString<RegisterRequest>(ctx.readBody())
+            Json.decodeFromString<RegisterRequest>(body)
         } catch (e: Exception) {
             return Err(400, "INVALID_BODY", "Malformed request body")
         }
@@ -46,6 +47,12 @@ class RegisterHandler(
         }
         if (request.password.length < MIN_PASSWORD_LENGTH) {
             return Err(400, "INVALID_INPUT", "password must be at least $MIN_PASSWORD_LENGTH characters")
+        }
+
+        // Closed unless enabled, except for the very first account (AuthConfig). Checked after the
+        // cheap input checks but before the deliberately slow password hashing.
+        if (!config.allowRegistration && users.exists()) {
+            return Err(403, "REGISTRATION_CLOSED", "Registration is closed. Ask whoever runs this proof to create your account")
         }
 
         val passwordChars = request.password.toCharArray()

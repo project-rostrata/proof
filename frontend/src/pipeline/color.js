@@ -21,7 +21,7 @@ export const SRGB_TO_XYZ = [
   0.2126729, 0.7151522, 0.0721750,
   0.0193339, 0.1191920, 0.9503041,
 ];
-export const XYZ_TO_SRGB = [
+const XYZ_TO_SRGB = [
   3.2404542, -1.5371385, -0.4985314,
   -0.9692660, 1.8760108, 0.0415560,
   0.0556434, -0.2040259, 1.0572252,
@@ -60,9 +60,9 @@ const CAT16_TO_XYZ = [
   -0.015841, -0.034123, 1.049964,
 ];
 
-export const D65_XY = [0.31271, 0.32902];
+const D65_XY = [0.31271, 0.32902];
 
-export function mul(m, v) {
+function mul(m, v) {
   return [
     m[0] * v[0] + m[1] * v[1] + m[2] * v[2],
     m[3] * v[0] + m[4] * v[1] + m[5] * v[2],
@@ -70,7 +70,7 @@ export function mul(m, v) {
   ];
 }
 
-export function matmul(a, b) {
+function matmul(a, b) {
   const out = new Array(9);
   for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) {
     out[i * 3 + j] = a[i * 3] * b[j] + a[i * 3 + 1] * b[3 + j] + a[i * 3 + 2] * b[6 + j];
@@ -81,7 +81,7 @@ export function matmul(a, b) {
 // GLSL's mat3 constructor is column-major. Passing a row-major matrix *as is* and multiplying
 // `v * M` in GLSL gives the row-major product M·v. Every matrix uniform and constant follows that
 // convention.
-export function glslMat3(m) {
+function glslMat3(m) {
   return `mat3(${m.map((x) => x.toFixed(10)).join(", ")})`;
 }
 
@@ -97,7 +97,7 @@ function lmsToYrg(lms) {
 // white (0.21902143, 0.54371398, computed through its D50 pipeline); recomputing it for proof's
 // matrices keeps neutral greys at exactly zero chroma.
 const WHITE_YRG = lmsToYrg(mul(XYZ_TO_LMS2006, mul(SRGB_TO_XYZ, [1, 1, 1])));
-export const WHITE_RG = [WHITE_YRG[1], WHITE_YRG[2]];
+const WHITE_RG = [WHITE_YRG[1], WHITE_YRG[2]];
 
 // Yrg luminance of sRGB white. The Kirk/CIE 2006 luminance puts it near 1.058, not 1, so tone
 // curves that must keep white at white work on Y / WHITE_Y.

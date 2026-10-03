@@ -7,9 +7,7 @@ A living doc: it describes the system as it exists right now, not the target des
 
 Docker images: see `deployment.md`. CI: `.github/workflows/docker-build.yml` (backend tests in Docker, pipeline tests via `frontend/test/run-headless.sh`, then the standalone image to GHCR).
 
-### Saving edits (Phase 11)
-
-### Saved edits
+### Saved edits (Phase 11)
 
 ```
 Editor ──Save──> fetch original ─> createImageBitmap (upright) ─> Pipeline.renderToPixels(recipe), full resolution
@@ -17,7 +15,8 @@ Editor ──Save──> fetch original ─> createImageBitmap (upright) ─> Pi
           body: [4-byte recipe length][recipe JSON][JPEG]   (fs/EditBody.kt)
 Server: check base (409 EDIT_CHANGED) ─> parse the frame (recipe must be {version:int, stack:[]}; render must be a JPEG)
         ─> splice the original's EXIF in (JpegExif: orientation reset to 1, no ICC)
-        ─> atomic writes: edits/<render name> + edits/<original>.recipe.json (rw-r--r--)
+        ─> under the project lock: check base again, then atomic writes:
+           edits/<render name> + edits/<original>.recipe.json (rw-r--r--)
         ─> photos.has_edit / edit_mtime / recipe_version ─> regenerate the display renditions from the render
 GET /api/photos/:id/edit    -> {editVersion, recipe}   (reopen; the frontend migrates it with loadRecipe)
 DELETE /api/photos/:id/edit -> deletes both files and reverts the thumbnails to the original
@@ -98,7 +97,7 @@ Sidecars changed by other tools are re-read by reconciliation (below). Cull writ
 - **Timestamps** go through `fs/FileTimes.kt` (truncated to microseconds, Postgres's precision), or every file would look changed on every pass.
 
 **Cull data flow.** `PATCH /api/photos/:photoId` takes either or both of `{rating 0-5, flag none|pick|reject}`:
-1. Take the per-photo lock (64 striped monitors), so concurrent keypresses can't race the sidecar's read-modify-write.
+1. Take the project lock (`index/Locks.kt`), so concurrent keypresses, and reconciliation, can't race the sidecar's read-modify-write.
 2. Read the current state from the XMP sidecar `originals/<file>.xmp`, which is the truth.
 3. Merge the change and write the sidecar (`image/Xmp`). This parses the existing document, updates only proof's properties, and writes it back atomically.
 4. Update the `photos` index row.
@@ -129,7 +128,23 @@ A sidecar that can't be parsed returns 409 `SIDECAR_UNREADABLE` and is never ove
 - build scripts and jar fetching (Phase 2);
 - the mini-gl seed (not loaded until Phase 8).
 
-**Backend tests: 102**, none needing Postgres. **Pipeline tests: 48**, in `frontend/test/pipeline.html`. Backend tests added through Phase 7:
+### Security (the 2026-10-03 audit)
+
+For a home server that may be reachable from outside. The reasons are in `decisions.md`.
+- **Accounts:**
+  - registration is closed once the first account exists, unless `PROOF_ALLOW_REGISTRATION=true`;
+  - after 10 failed sign-ins in 15 minutes, a username gets 429 until the window ends (`auth/LoginThrottle.kt`, in memory);
+  - an unknown username is hashed against a decoy, so the response time doesn't reveal which usernames exist.
+- **Requests:**
+  - JSON bodies go through `readBody()`, capped at 64 KB (413). Uploads and edit saves stream with their own caps.
+  - Every response carries `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, and `Referrer-Policy: same-origin` (`api/Router.kt`).
+  - CSRF protection is the `SameSite=Lax` session cookie: every state change is a non-GET request.
+- **Images:** anything over 250 MP (`image/OriginalFacts.kt` `MAX_PIXELS`) is refused on upload and edit save, and skipped by reconciliation. This is checked from the header, before any decode.
+- **Paths:** see path safety (Phase 3) and reconciliation (no symlinks followed).
+
+### Tests
+
+**Backend: 114**, none needing Postgres. **Pipeline: 48**, in `frontend/test/pipeline.html`. Backend coverage:
 - EXIF in both byte orders, with truncation, random garbage, and a self-referencing IFD;
 - all 8 orientations, checked against an independent reference;
 - type sniffing;
@@ -137,6 +152,9 @@ A sidecar that can't be parsed returns 409 `SIDECAR_UNREADABLE` and is never ove
 - name validation, and the rename regression;
 - the upload receiver (cap, cleanup, hash);
 - display strings;
-- XMP read/write: the darktable merge, element-form properties, XXE and broken files refused, and byte-stable rewrites.
+- XMP read/write: the darktable merge, element-form properties, XXE and broken files refused, byte-stable rewrites, and another tool's colour label left alone;
+- the edit body framing and recipe version;
+- the reconciliation planner, and timestamp precision;
+- the login throttle, the JSON body cap, and the security headers.
 
 Not yet present: export (Phase 12, skipped for now).

@@ -45,7 +45,8 @@ Thrown exceptions are for genuinely unexpected errors, caught once at the top of
 | 403 | Path-safety violation, or acting outside the user's permissions |
 | 404 | Not found |
 | 409 | A write based on a stale version (for example, saving an edit over a render that changed since it was loaded) |
-| 413 | Upload exceeds the configured size cap |
+| 413 | Upload exceeds the configured size cap, or a JSON body is over 64 KB |
+| 429 | Too many failed sign-ins for a username (`auth/LoginThrottle.kt`) |
 | 500 | Unexpected error |
 
 ## The API is the source of truth; the UI stays dumb (except for pixels)
@@ -121,11 +122,14 @@ This is the human's standing direction from `larder`: filtering, formatting, and
 ## Security rules
 
 - **Filenames reaching the filesystem.** Project names and uploaded filenames become paths, so they go through the path-safety module reused from `shelf` (canonicalize, verify the path is under the user's root, reject anything that isn't). Never pass a client-supplied name directly to `Path.resolve`.
+- **Request bodies.** JSON bodies are read only through `RouteContext.readBody()`, which is capped, and outside any `try`/`runCatching` that turns errors into a 400, so an oversized body stays a 413. A route that takes a big body streams it with its own cap, as upload and edit save do.
+- **Image dimensions.** Anything that accepts an image checks `MAX_PIXELS` (`image/OriginalFacts.kt`) from the header before anything decodes it. A small file can describe an enormous image.
+- **Disk and index together.** A change that touches both the project tree and the index takes the matching lock from `index/Locks.kt` (user, then project), so it can't interleave with reconciliation or another request.
 - **Running external tools** (if v1.5 adds the HEIC/RAW decoders) uses `ProcessBuilder`'s array-args form only, as in `press`. A client-controlled string must never reach a shell.
 
 ## Concurrency
 
-Handlers are plain blocking code, run on a bounded thread-pool `Executor`. Thumbnail and preview generation is CPU- and memory-heavy, because a decoded 24 MP image is about 100 MB. Run it on its own small, bounded executor so a big batch upload can't starve request handling or exhaust the heap. The reconciliation backstop scan uses a plain `ScheduledExecutorService`. No coroutines by default (`kotlinx.coroutines` is pre-approved if a genuine need shows up).
+Handlers are plain blocking code, run on a bounded thread-pool `Executor`. Changes that touch both disk and index are serialized per user and per project by `index/Locks.kt` (see Security rules). Thumbnail and preview generation is CPU- and memory-heavy, because a decoded 24 MP image is about 100 MB. Run it on its own small, bounded executor so a big batch upload can't starve request handling or exhaust the heap. The reconciliation backstop scan uses a plain `ScheduledExecutorService`. No coroutines by default (`kotlinx.coroutines` is pre-approved if a genuine need shows up).
 
 ## Logging
 
@@ -137,14 +141,14 @@ Environment variables only, `PROOF_`-prefixed (`PROOF_DATA`, `PROOF_PORT`, `PROO
 
 ## Testing
 
-- **Backend:** no test framework dependency. Tests are plain top-level `test<Something>()` functions under `backend/test/`, discovered by a hand-rolled `TestMain.kt` and asserted with `kotlin.test.*` from the `kotlinc` distribution. `backend/test.sh` compiles and runs them, as in `shelf`. The EXIF reader, the EXIF splice, and XMP read/write get real-camera fixture files, small and committed as test data, covering all 8 EXIF orientations.
+- **Backend:** no test framework dependency. Tests are plain top-level `test<Something>()` functions under `backend/test/`, discovered by a hand-rolled `TestMain.kt` and asserted with `kotlin.test.*` from the `kotlinc` distribution. `backend/test.sh` compiles and runs them, as in `shelf`. The EXIF reader, the EXIF splice, and XMP read/write are tested on fixtures built in code (`test/TestImages.kt` builds TIFF/EXIF blocks and JPEGs, covering all 8 orientations), so no binary test data is committed.
 - **Frontend pipeline:** `frontend/test/pipeline.html` (with `pipeline-tests.js`) is a zero-dependency test page. It checks each tool in four ways:
   - its identity at defaults, both skipped and forced to run;
   - finiteness at every slider extreme;
   - CPU references for the tone curves;
   - the property it promises (monotone, neutral stays neutral, preview matches export, and so on).
 
-  Serve `frontend/` and open `/test/pipeline.html`. `backend/run.sh` serves it, as does any static server. Results also land in `window.__pipelineTests` for headless runs. CI may run it under apt-installed headless Chromium, but never through npm.
+  Serve `frontend/` and open `/test/pipeline.html`. `backend/run.sh` serves it, as does any static server. Results also land in `window.__pipelineTests` for headless runs. `frontend/test/run-headless.sh` runs it in headless Chrome (CI uses the runner's preinstalled Chrome), never through npm.
 
 ## Dependency policy
 

@@ -37,6 +37,8 @@ services:
       # Real deployments behind HTTPS must set this to true (docs/deployment.md). False here only
       # because local development runs over plain HTTP.
       PROOF_SECURE_COOKIES: ${PROOF_SECURE_COOKIES:-false}
+      # Off by default: only the first account can register (docs/deployment.md).
+      PROOF_ALLOW_REGISTRATION: ${PROOF_ALLOW_REGISTRATION:-false}
       PROOF_MAX_UPLOAD_BYTES: ${PROOF_MAX_UPLOAD_BYTES:-100000000}
       PROOF_RECONCILE_INTERVAL_MINUTES: ${PROOF_RECONCILE_INTERVAL_MINUTES:-15}
       PUID: ${PUID:-1000}

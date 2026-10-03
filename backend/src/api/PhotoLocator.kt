@@ -2,15 +2,15 @@ package proof.api
 
 import proof.db.PhotoRepository
 import proof.db.PhotoRow
+import proof.fs.Resolved
 import proof.fs.editsDir
 import proof.fs.isValidPhotoFilename
 import proof.fs.isValidProjectName
 import proof.fs.originalsDir
 import proof.fs.recipeName
 import proof.fs.renderName
-import proof.fs.resolveUnderRoot
-import proof.fs.Resolved
 import proof.fs.resolveChild
+import proof.fs.resolveUnderRoot
 import proof.fs.userRoot
 import java.nio.file.Files
 import java.nio.file.Path

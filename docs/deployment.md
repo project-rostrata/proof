@@ -19,6 +19,7 @@ Settings, all set through the environment or a `docker/.env` file:
 | `PUID` / `PGID` | `1000` | The owner of files proof writes on the host. |
 | `PROOF_PORT` | `8080` | The host port. |
 | `PROOF_SECURE_COOKIES` | `false` | **Set to `true` behind HTTPS.** |
+| `PROOF_ALLOW_REGISTRATION` | `false` | Whether anyone can create an account. The first account can always be created, so a fresh install works. To add a household member later, set it to `true`, restart, let them register, then set it back. |
 | `PROOF_MAX_UPLOAD_BYTES` | `100000000` | 100 MB per photo. |
 | `PROOF_SESSION_DURATION_HOURS` | `720` | |
 | `PROOF_RECONCILE_INTERVAL_MINUTES` | `15` | How often the background pass looks for changes made outside the app (over SMB, by darktable). Opening a page already checks what it shows. `0` turns the background pass off. |
@@ -32,6 +33,20 @@ docker run -d -p 8080:8080 -e PROOF_DB_PASSWORD=... -e PUID=$(id -u) -e PGID=$(i
 
 `/data/photos` holds proof's files and `/data/postgres` holds the database (owned by the container's
 `postgres` user). Postgres listens on loopback only.
+
+## Reaching it from outside your home network
+
+proof is built for a home server. If it's reachable from the internet:
+- **Serve it over HTTPS** through a reverse proxy (Caddy, nginx, Traefik), and set `PROOF_SECURE_COOKIES=true` so the session cookie is never sent in the clear.
+- **Change `PROOF_DB_PASSWORD`** from its default. In compose, Postgres has no host port. In the standalone image it listens on loopback only.
+- **Leave `PROOF_ALLOW_REGISTRATION` off**, apart from while adding someone.
+- **What's built in:**
+  - repeated failed sign-ins for a username are throttled (10 in 15 minutes);
+  - request bodies, uploads, and image dimensions are capped;
+  - pages can't be framed by other sites.
+
+  There's no two-factor sign-in. For more than a household, put an authenticating proxy in front.
+- **Proxy upload limit:** set the proxy's request size limit to at least `PROOF_MAX_UPLOAD_BYTES`. nginx's default is 1 MB, which refuses most photos.
 
 ## Notes
 

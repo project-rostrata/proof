@@ -12,9 +12,10 @@ import proof.db.PhotoRepository
 import proof.db.PhotoRow
 import proof.db.ProjectRepository
 import proof.fs.Received
+import proof.fs.fileMtime
 import proof.fs.isValidPhotoFilename
-import proof.fs.makeShareable
 import proof.fs.isValidProjectName
+import proof.fs.makeShareable
 import proof.fs.originalsDir
 import proof.fs.receiveUpload
 import proof.fs.resolveChild
@@ -25,14 +26,14 @@ import proof.image.FLAGS
 import proof.image.Rendition
 import proof.image.RenditionGroup
 import proof.image.Renditions
-import proof.image.group
 import proof.image.SidecarUnreadable
 import proof.image.Xmp
+import proof.image.exceedsPixelLimit
+import proof.image.group
 import proof.image.readOriginalFacts
 import proof.index.Locks
 import proof.index.Reconciler
 import proof.index.toNewPhoto
-import proof.fs.fileMtime
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
@@ -149,7 +150,7 @@ class PhotosHandler(
     // The XMP sidecar is written first (it's the truth), then the index.
     // Returns the updated photo and fresh view counts, so the UI never recounts anything itself.
     fun cull(ctx: RouteContext, user: AuthenticatedUser): ApiResult<String> {
-        val body = runCatching { Json.parseToJsonElement(ctx.readBody()).jsonObject }.getOrNull()
+        val body = ctx.readBody().let { text -> runCatching { Json.parseToJsonElement(text).jsonObject }.getOrNull() }
             ?: return Err(400, "INVALID_BODY", "Malformed request body")
         val located = locator.locate(ctx, user) ?: return Err(404, "NOT_FOUND", "No such photo")
         val photo = located.photo
@@ -207,6 +208,7 @@ class PhotosHandler(
                 return Err(400, "UNSUPPORTED_TYPE", "$filename is a ${received.type.name} file, but its name says .$extension")
             }
             val facts = readOriginalFacts(received.path) ?: return Err(400, "UNREADABLE_IMAGE", "$filename couldn't be decoded")
+            if (facts.exceedsPixelLimit()) return Err(400, "IMAGE_TOO_LARGE", "$filename is ${facts.width} × ${facts.height}, more pixels than proof accepts")
             // Under the project lock from the name check to the insert, so reconciliation can't
             // index the file in between (and then lose it to this upload's cleanup below).
             val photo = locks.project(project.id) {

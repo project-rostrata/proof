@@ -14,7 +14,7 @@
 
 // Maps the unit square (0,0) (1,0) (1,1) (0,1) to the quad p0..p3 (corners in that order).
 // Row-major, applied to column vectors (x, y, 1).
-export function squareToQuad([x0, y0], [x1, y1], [x2, y2], [x3, y3]) {
+function squareToQuad([x0, y0], [x1, y1], [x2, y2], [x3, y3]) {
   const dx1 = x1 - x2, dy1 = y1 - y2;
   const dx2 = x3 - x2, dy2 = y3 - y2;
   const dx3 = x0 - x1 + x2 - x3, dy3 = y0 - y1 + y2 - y3;
@@ -29,7 +29,7 @@ export function squareToQuad([x0, y0], [x1, y1], [x2, y2], [x3, y3]) {
   ];
 }
 
-export function invert3(m) {
+function invert3(m) {
   const [a, b, c, d, e, f, g, h, i] = m;
   const det = a * e * i - a * f * h - b * d * i + b * f * g + c * d * h - c * e * g;
   return [
@@ -39,7 +39,7 @@ export function invert3(m) {
   ];
 }
 
-export function multiply3(a, b) {
+function multiply3(a, b) {
   const out = new Array(9);
   for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) {
     out[r * 3 + c] = a[r * 3] * b[c] + a[r * 3 + 1] * b[3 + c] + a[r * 3 + 2] * b[6 + c];
@@ -65,10 +65,6 @@ export function cropPixels([x, y, w, h], width, height) {
   return { x: x0, y: y0, width: x1 - x0, height: y1 - y0 };
 }
 
-// Aspect presets as width/height of a landscape frame. Each non-square preset also has a portrait
-// form, "h:w".
-export const ASPECTS = ["free", "original", "1:1", "3:2", "4:3", "5:4", "16:9"];
-
 // The pixel aspect (width / height) an aspect setting asks for, or null for free.
 export function aspectRatio(aspect, imageWidth, imageHeight) {
   if (aspect === "free") return null;
@@ -88,7 +84,7 @@ export function centredRect(ratio, imageWidth, imageHeight) {
 // ---- rotate ----------------------------------------------------------------------------------
 
 // Size after quarter turns (an odd number of turns swaps width and height).
-export function turnedSize(width, height, quarterTurns) {
+function turnedSize(width, height, quarterTurns) {
   return quarterTurns % 2 ? [height, width] : [width, height];
 }
 

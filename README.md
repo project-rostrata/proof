@@ -55,9 +55,11 @@ in a plain `edits/` folder. PostgreSQL is only an index over those files.
 docker compose -f docker/docker-compose.yml up -d --build
 ```
 
-Then open http://localhost:8080 and register. See [`docs/deployment.md`](docs/deployment.md) for
-the settings that matter before using it for real (the database password, `PROOF_SECURE_COOKIES`,
-`PUID`/`PGID`, and where your photos live), and for the single-container standalone image.
+Then open http://localhost:8080 and register. Only the first account can register on its own;
+after that, registration is closed unless you turn it on (`PROOF_ALLOW_REGISTRATION`). See
+[`docs/deployment.md`](docs/deployment.md) for the settings that matter before using it for real
+(the database password, `PROOF_SECURE_COOKIES`, `PUID`/`PGID`, and where your photos live), and
+for the single-container standalone image.
 
 Photos live on disk in their normal form, so they're easy to back up and to reach over SMB. proof
 picks up changes made there:

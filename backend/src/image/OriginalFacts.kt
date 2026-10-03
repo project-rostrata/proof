@@ -7,6 +7,14 @@ import java.nio.file.Path
 // so only the head of the file is read for it.
 private const val EXIF_SCAN_BYTES = 1 shl 20
 
+// The largest image proof accepts, in pixels: comfortably above any camera or phone (the largest
+// phone sensors are 200 MP). A PNG of enormous dimensions can compress to a few megabytes, well under
+// the upload cap, yet take minutes of CPU to decode for its thumbnail, so this is checked on upload,
+// on edit save, and in reconciliation, from the header alone.
+const val MAX_PIXELS = 250_000_000L
+
+fun OriginalFacts.exceedsPixelLimit(): Boolean = width.toLong() * height > MAX_PIXELS
+
 // What the index records about an original that comes from reading the image itself: its upright
 // size (already swapped for EXIF orientations 5-8) and its EXIF. Shared by upload and
 // reconciliation, so a photo is described the same way however it arrived.

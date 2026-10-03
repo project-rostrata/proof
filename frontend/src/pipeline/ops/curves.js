@@ -22,9 +22,9 @@ void main() {
   outColor = vec4(srgbDecode(v), 1.0);
 }`;
 
-export const DEFAULT_CURVES = { rgb: IDENTITY_CURVE, red: IDENTITY_CURVE, green: IDENTITY_CURVE, blue: IDENTITY_CURVE };
+const DEFAULT_CURVES = { rgb: IDENTITY_CURVE, red: IDENTITY_CURVE, green: IDENTITY_CURVE, blue: IDENTITY_CURVE };
 
-export function buildLut(points) {
+function buildLut(points) {
   const master = curveFunction(points.rgb);
   const channel = CHANNELS.map((c) => curveFunction(points[c]));
   const data = new Float32Array(LUT_SIZE * 4);

@@ -15,8 +15,8 @@ typealias StreamHandler = (RouteContext) -> StreamResult
 
 // Copied from shelf's Router.kt (V1_PLAN.md Phase 3), package renamed.
 //
-// Routes that don't return a JSON body (static files now; photo/thumbnail/preview downloads and the
-// export ZIP later) get their own parallel result type instead of bending ApiResult's Ok/Err
+// Routes that don't return a JSON body (static files, photos, thumbnails, and previews) get their own
+// parallel result type instead of bending ApiResult's Ok/Err
 // contract to fit them. StreamFailed wraps a plain Err so error cases still produce the exact same
 // JSON error envelope every other endpoint does.
 sealed class StreamResult
@@ -36,7 +36,29 @@ class RouteContext(
     val exchange: HttpExchange,
 )
 
-fun RouteContext.readBody(): String = exchange.requestBody.readAllBytes().decodeToString()
+// JSON request bodies are small (a name, a rating, a password). The cap stops an anonymous request
+// (login and register read a body) from making the server buffer an arbitrarily large one in memory.
+// Uploads and edit saves stream their bodies instead, with their own caps.
+const val MAX_JSON_BODY_BYTES = 64 * 1024
+
+class BodyTooLarge : Exception("request body over $MAX_JSON_BODY_BYTES bytes")
+
+fun RouteContext.readBody(): String {
+    val bytes = exchange.requestBody.readNBytes(MAX_JSON_BODY_BYTES + 1)
+    if (bytes.size > MAX_JSON_BODY_BYTES) throw BodyTooLarge()
+    return bytes.decodeToString()
+}
+
+// Sent with every response. nosniff stops a browser from reinterpreting a file as another type,
+// DENY stops other sites from framing proof (clickjacking), and same-origin keeps photo URLs out of
+// the Referer header sent to other sites. (A full Content-Security-Policy isn't set: the editor
+// needs WebGL, blob images, and inline styles from VanJS, so a strict one would mostly be
+// exceptions.)
+private val SECURITY_HEADERS = mapOf(
+    "X-Content-Type-Options" to "nosniff",
+    "X-Frame-Options" to "DENY",
+    "Referrer-Policy" to "same-origin",
+)
 
 sealed class RouteHandler {
     data class Json(val handler: Handler) : RouteHandler()
@@ -160,6 +182,8 @@ class Router {
 
     private fun guarded(method: String, path: String, block: () -> ApiResult<String>): ApiResult<String> = try {
         block()
+    } catch (e: BodyTooLarge) {
+        Err(413, "TOO_LARGE", "Request body too large")
     } catch (e: Exception) {
         logger.log(Level.SEVERE, "unhandled exception in handler for $method $path", e)
         Err(500, "INTERNAL_ERROR", "Unexpected server error")
@@ -186,6 +210,7 @@ class Router {
             }
         }
         val bytes = body.toByteArray(Charsets.UTF_8)
+        SECURITY_HEADERS.forEach { (name, value) -> exchange.responseHeaders.set(name, value) }
         exchange.responseHeaders.add("Content-Type", "application/json; charset=utf-8")
         exchange.sendResponseHeaders(status, bytes.size.toLong())
         exchange.responseBody.write(bytes)
@@ -195,6 +220,7 @@ class Router {
         when (result) {
             is StreamFailed -> respondJson(exchange, result.err)
             is FileStream -> {
+                SECURITY_HEADERS.forEach { (name, value) -> exchange.responseHeaders.set(name, value) }
                 exchange.responseHeaders.add("Content-Type", result.contentType)
                 result.headers.forEach { (name, value) -> exchange.responseHeaders.add(name, value) }
                 if (result.asAttachment) {

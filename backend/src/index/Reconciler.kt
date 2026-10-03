@@ -22,6 +22,7 @@ import proof.image.OriginalFacts
 import proof.image.Renditions
 import proof.image.SidecarUnreadable
 import proof.image.Xmp
+import proof.image.exceedsPixelLimit
 import proof.image.readOriginalFacts
 import proof.image.sniff
 import java.io.IOException
@@ -159,8 +160,8 @@ class Reconciler(
                     logger.fine("reconciliation: skipping ${disk.filename}: not a JPEG or PNG matching its extension")
                     return@mapNotNull null
                 }
-                val facts = readOriginalFacts(file) ?: run {
-                    logger.fine("reconciliation: skipping ${disk.filename}: couldn't be decoded")
+                val facts = readOriginalFacts(file)?.takeUnless { it.exceedsPixelLimit() } ?: run {
+                    logger.fine("reconciliation: skipping ${disk.filename}: couldn't be decoded, or has too many pixels")
                     return@mapNotNull null
                 }
                 disk.filename to Prepared(disk.sizeBytes, disk.mtime, sha256Of(file), facts)

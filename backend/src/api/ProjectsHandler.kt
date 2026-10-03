@@ -1,7 +1,5 @@
 package proof.api
 
-import proof.index.Locks
-import proof.index.Reconciler
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -13,6 +11,8 @@ import proof.fs.renameDirectory
 import proof.fs.resolveChild
 import proof.fs.userRoot
 import proof.image.Renditions
+import proof.index.Locks
+import proof.index.Reconciler
 import java.nio.file.FileAlreadyExistsException
 import java.nio.file.Files
 import java.nio.file.Path
@@ -142,7 +142,7 @@ class ProjectsHandler(
         projects.listSummaries(user.id).first { it.project.id == projectId }.toApi()
 
     private fun readName(ctx: RouteContext): String? =
-        runCatching { Json.decodeFromString<ProjectNameRequest>(ctx.readBody()).name }.getOrNull()
+        ctx.readBody().let { body -> runCatching { Json.decodeFromString<ProjectNameRequest>(body).name }.getOrNull() }
 }
 
 fun projectNotFound(): Err = Err(404, "NOT_FOUND", "No such project")

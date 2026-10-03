@@ -13,6 +13,7 @@ import proof.api.healthHandler
 import proof.api.requireAuth
 import proof.api.requireAuthStream
 import proof.auth.AuthConfig
+import proof.auth.LoginThrottle
 import proof.db.ConnectionPool
 import proof.db.Database
 import proof.db.MigrationRunner
@@ -56,6 +57,7 @@ fun main() {
     val authConfig = AuthConfig(
         sessionDurationHours = (System.getenv("PROOF_SESSION_DURATION_HOURS") ?: "720").toLong(),
         secureCookies = (System.getenv("PROOF_SECURE_COOKIES") ?: "false").toBoolean(),
+        allowRegistration = (System.getenv("PROOF_ALLOW_REGISTRATION") ?: "false").toBoolean(),
     )
     // The default covers the HTTP pool plus headroom for the background work later phases add.
     val dbPoolSize = (System.getenv("PROOF_DB_POOL_SIZE") ?: "10").toInt()
@@ -113,7 +115,7 @@ fun buildApp(
     val photosHandler = PhotosHandler(projects, photos, locator, renditions, renditionExecutor, dataRoot, maxUploadBytes, locks, reconciler)
     val editsHandler = EditsHandler(photos, locator, renditions, renditionExecutor, dataRoot, maxUploadBytes, locks)
     val registerHandler = RegisterHandler(users, sessions, dataRoot, authConfig)
-    val loginHandler = LoginHandler(users, sessions, authConfig)
+    val loginHandler = LoginHandler(users, sessions, authConfig, LoginThrottle())
     val logoutHandler = LogoutHandler(sessions, authConfig.secureCookies)
     val meHandler = MeHandler()
 

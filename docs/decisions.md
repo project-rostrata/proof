@@ -527,3 +527,65 @@ Reloading the page is the refresh, so the plan's manual "refresh" isn't needed: 
   - repeat views logging nothing.
 - A contention run: 30 uploads, 15 files copied in mid-run, 40 views, and 40 culls, all at once. Every request returned 200, all 45 photos were indexed, every upload was byte-identical, and there were no warnings.
 - The backstop pass indexed a new photo and a new project folder after one minute with no page views.
+
+## 2026-10-03 — Audit: secure enough for a home server, and maintainable
+
+The human asked for a last full audit, with two goals: secure enough for a home server, but above all maintainable. Every backend file and the Docker and CI setup were read in full, the frontend was scanned for injection sinks and dead code, and every doc was checked against the code. Each finding below was confirmed against a running server before it was fixed, and checked again after.
+
+**Security, fixed.** None of the sibling apps (shelf, larder, press) has any of these protections. They have the same gaps, and porting the fixes is noted in the handoff.
+- **An anonymous request could exhaust the heap.** `readBody()` read the whole body, and login and register read one before any authentication. A 300 MB body was buffered in full (1.1 GB resident).
+  - Fix: JSON bodies are now capped at 64 KB (413). The 300 MB body was refused in 18 ms, with the server at 126 MB.
+  - Lesson: the handlers had wrapped `readBody()` inside their parse `try`/`runCatching`, which turned the 413 into a 400. Reading happens outside those now, and `AGENTS.md` says so.
+- **Registration was open to anyone who could reach the server**, and an account can store files.
+  - Fix: registration now closes once the first account exists, unless `PROOF_ALLOW_REGISTRATION=true`. A fresh install still works with no setup.
+  - Adding a household member means turning it on briefly (`docs/deployment.md`). It's checked after input validation but before the deliberately slow hashing, so a bad request still fails fast without the database.
+- **Login timing revealed which usernames exist** (140 ms for a real one against 5 ms for an unknown one, because only real ones were hashed).
+  - Fix: an unknown username is now verified against a decoy hash.
+- **No brute-force limit.** At about 0.15 s per guess, a weak 8-character password could be found online in days.
+  - Fix: `auth/LoginThrottle.kt` refuses a username for the rest of a 15-minute window after 10 failures (429), and a success clears it.
+  - It's keyed by username, not IP address, because behind a reverse proxy every request comes from the proxy. The cost, that someone can keep an account's sign-in blocked, doesn't touch existing sessions.
+  - Unknown usernames are throttled the same way, so the throttle doesn't reveal accounts either. It's in memory, so a restart resets it.
+- **Decompression bombs.** A 20000 × 13000 PNG of zeros is 740 KB, far under the upload cap, but decoding it for thumbnails would take minutes of CPU per pass.
+  - Fix: images over 250 MP (above any camera or phone) are refused on upload and edit save, and skipped by reconciliation, using the header alone. The bomb was refused in 92 ms.
+- **Security headers.** Every response now has `nosniff`, `X-Frame-Options: DENY` (against clickjacking), and `Referrer-Policy: same-origin`. A full CSP was left out: the editor's WebGL, blob images, and VanJS inline styles would make a strict one mostly exceptions.
+
+**Security, checked and left as is:**
+- **SQL:** every query is parameterised, and the only interpolated SQL is fixed enum predicates.
+- **Paths:** path safety on every name, and reconciliation never follows a symlink.
+- **XML:** XMP parsing has no DTDs, so no external entities.
+- **Frontend:** no HTML-injection sinks (VanJS sets text nodes). The only `innerHTML` is in the test page, writing constant markup.
+- **Malformed URLs** are refused by the JDK's HTTP server with a 400, before proof sees them.
+- **CSRF** is handled by the `SameSite=Lax` cookie, with every state change a non-GET request. An Origin-header check was considered and rejected: nginx's default proxy config rewrites `Host`, so it would break writes for a common setup.
+- **Docker:**
+  - Postgres has no host port in compose, and listens on loopback only in the standalone image (with trust auth inside the container, as in shelf).
+  - The app runs as `PUID:PGID`, and files land `rw-r--r--`.
+  - Test files are kept out of the image.
+- **No two-factor sign-in.** That's fine for a household. The deployment doc says to put an authenticating proxy in front for more than that.
+
+**Maintainability, fixed:**
+- **`docs/handoff.md`** said it's rewritten each session, but had been appended to every phase. It contradicted itself: Phase 6 was still "deferred". It's now a short current-state page, and the history stays in `V1_PLAN.md` and here.
+- **`AGENTS.md`** claimed the EXIF and XMP tests use committed real-camera fixtures (they're built in code, in `TestImages.kt`) and that CI uses apt-installed Chromium (it uses the runner's Chrome). Both fixed. It also gains three security rules, and 413/429 in the status table.
+- **`docs/architecture.md`** had a duplicated heading, a stale lock description (photo-striped culls), and stale test counts. It gains a Security section.
+- **Code:**
+  - a dead constant (`ASPECTS`) was removed;
+  - 18 pipeline exports used only in their own file were made private;
+  - imports were normalised to the project's IntelliJ ordering (four files were out of order);
+  - a static check confirms every frontend import resolves to a real export, since a missing export blanks the whole app at load;
+  - there are no unused imports in the backend, and no compiler warnings.
+- **The deployment doc** gains a "Reaching it from outside your home network" section: HTTPS and `PROOF_SECURE_COOKIES`, the database password, registration, what's built in, and the proxy upload limit (nginx's 1 MB default refuses most photos).
+
+**Maintainability, noted but not changed:**
+- **`Editor.js` is the largest file (about 460 lines).** It's cohesive (one editing session), and splitting the photo gestures out would move code without making it simpler.
+- **`decisions.md` has grown long (over 500 lines).** It's append-only by design, so it stays that way. `handoff.md` and `architecture.md` are now the short entry points.
+
+**Checked:**
+- 114 backend tests pass, natively and in the Docker test stage.
+- 48 pipeline tests pass in headless Chrome.
+- The production compose stack was driven end to end through the UI:
+  - first-account registration, then a second account refused;
+  - upload through the file picker;
+  - clicking a rating and Pick in the loupe;
+  - a wheel-adjusted edit, saved;
+  - a photo copied into the folder appearing on reload.
+
+  No page errors, and every file written was owned by the host user.

@@ -1,22 +1,23 @@
 package proof.api
 
-import proof.fs.fileMtime
-import proof.index.Locks
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import proof.db.PhotoRepository
 import proof.fs.EditBody
+import proof.fs.fileMtime
 import proof.fs.makeShareable
 import proof.fs.receiveEdit
 import proof.fs.recipeVersionOf
 import proof.fs.renderName
 import proof.fs.tmpRoot
 import proof.image.JpegExif
+import proof.image.MAX_PIXELS
 import proof.image.RenditionGroup
 import proof.image.Renditions
 import proof.image.probeSize
+import proof.index.Locks
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
@@ -74,7 +75,8 @@ class EditsHandler(
         val renderTmp = parsed.render.path
         val recipeTmp = Files.createTempFile(located.edits, ".recipe-", ".tmp")
         try {
-            if (probeSize(renderTmp) == null) return Err(400, "UNREADABLE_IMAGE", "The edited photo couldn't be decoded")
+            val (renderW, renderH) = probeSize(renderTmp) ?: return Err(400, "UNREADABLE_IMAGE", "The edited photo couldn't be decoded")
+            if (renderW.toLong() * renderH > MAX_PIXELS) return Err(400, "IMAGE_TOO_LARGE", "The edited photo has more pixels than proof accepts")
             // canvas.toBlob() writes no metadata: put the original's EXIF back, now upright.
             val exif = Files.newInputStream(located.original).use { it.readNBytes(EXIF_SCAN_BYTES) }.let(JpegExif::exifSegment)
             if (exif != null) {

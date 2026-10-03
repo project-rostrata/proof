@@ -33,7 +33,7 @@ import { shape } from "./shared.js";
 import { TONE_FUNCTIONS, brightnessExponent, contrastExponent } from "./tune.js";
 
 // darktable channelmixerrgb monochrome presets: weights on CIE XYZ.
-export const FILMS = {
+const FILMS = {
   luminance: { label: "Neutral", weights: [0, 1, 0] },
   hp5: { label: "Ilford HP5+", weights: [0.25304098, 0.25958747, 0.48737156] },
   delta100: { label: "Ilford Delta 100", weights: [0.24552374, 0.25366007, 0.50081619] },
@@ -44,7 +44,7 @@ export const FILMS = {
 
 // Lens filters as a colour in Lab (hue angle in degrees, chroma 80), as in darktable's monochrome
 // colour picker. "none" skips the filter.
-export const FILTERS = {
+const FILTERS = {
   none: { label: "None" },
   red: { label: "Red", hue: 40 },
   orange: { label: "Orange", hue: 62 },

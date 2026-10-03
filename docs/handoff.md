@@ -1,112 +1,32 @@
 # Session handoff
 
-This file is *state*, not documentation. For durable decisions, read `decisions.md`. It gets rewritten each session to reflect where things stand, rather than appended to indefinitely.
+This file is *state*, not documentation: where things stand now, for whoever picks the project up next. Rewrite it each session; don't append to it. The history of how it got here is in `../V1_PLAN.md` (phase by phase) and `decisions.md` (why).
 
-## Where things stand
+## Where things stand (2026-10-03)
 
-As of 2026-10-02 there are planning docs only, and no code exists yet. The initial planning conversation settled:
-- the name (**proof**);
-- rendering in the browser with WebGL2;
-- storing the render plus an opaque recipe;
-- files as truth with a Postgres index;
-- JPEG and PNG only for v1.
+v1 is built, except export (Phase 12, skipped at the human's request). That includes reconciliation (Phase 6), which was deferred and then built after Phase 14. A full audit followed, for security on a home server and for maintainability. See the last entries in `decisions.md`.
 
-All of these are recorded in `PROJECT_BRIEF.md` §4 and `decisions.md`.
+- **Backend:** 114 tests pass (`backend/test.sh`), and in Docker (`docker build -f docker/Dockerfile --target backend-test .`).
+- **Pipeline:** 48 tests pass in headless Chrome (`frontend/test/run-headless.sh`).
+- **CI** (`.github/workflows/docker-build.yml`) has never run on GitHub, because there's no remote yet.
 
-## What's still open
+Everything has been checked in headless Chrome (software GPU, synthetic photos) and against real Postgres. The human has used it on their own desktop, and their feedback shaped the work after Phase 14: the loupe culling controls, swiping, Snapseed-style adjusting, the theme switch, and the eel-green accent.
 
-`PROJECT_BRIEF.md` §5 lists the open questions:
-- **auth** (the recommendation is `shelf`-style accounts);
-- XMP sidecar naming;
-- the max upload size;
-- export options;
-- purging rejects;
-- sign-off on the v1 edit tool list.
+## For the human
 
-## Phase 1 spike status (2026-10-02)
+- Try the whole flow on a real desktop and phone with real photos, especially swiping in the loupe and adjusting on the photo in the editor.
+- Create a GitHub repo and push, as with the siblings, so CI runs for real.
+- Decide on the open items: export (Phase 12), and purging rejects (`PROJECT_BRIEF.md` §5).
+- Consider porting the audit's security fixes to `shelf` and `larder`, which have the same gaps (`decisions.md`, the audit entry).
 
-- mini-gl was approved as the base for the edit pipeline. The spike is built in `spike/` and tests two variants: upstream as-is (vendored at `28238857`) and a minimal half-float fork.
-- Correctness was verified headless (Chrome 154 on SwiftShader, run from the dev VM over CDP, with no npm involved). See `decisions.md` and `spike/README.md`. The short version: orientation, the Exif splice, and colour all pass. mini-gl's *tonal* filters (contrast, brightness, curves, highlights/shadows) have real quality defects. Half-float helps banding modestly but exposes a NaN bug in Highlights/Shadows.
-- The human ran it on Firefox 156 on a Linux desktop with a real 16 MP JPEG. Correctness repeated exactly. Preview frames took 8 ms (8-bit) and 13 ms (half-float), and a full-resolution save about 630 ms. The human said it felt "pretty good", with the sliders a bit too sensitive. All recorded in `decisions.md`.
-- Phone run (Firefox 157 on Android, Pixel 7a): also good, with a 13/20 ms preview and a 0.5 s save. GPU output isn't bit-identical across devices, so the pipeline tests need a tolerance.
-- **Provenance audit done** (`decisions.md`). Several mini-gl filters cite Shadertoy (CC BY-NC-SA by default), a 2014 Stack Overflow answer (CC BY-SA 3.0), or Pintura (proprietary). Only the GL core, runner, spline, perspective, and matrix transform can be carried over. All pixel filters get written fresh.
-- **Phase 1 closed (2026-10-02).** The human confirmed the narrow fork and said to take filters from darktable. Safari and iPad are out of scope for v1, and the targets are Firefox and Chromium on desktop and Android. The raw results JSON was not kept, because the numbers are in `decisions.md`.
+## Known limitations
 
-## Phase 2 status (2026-10-02)
+Listed in `decisions.md` (the Phase 14 entry):
+- banding when shadows are lifted hard on 8-bit sources;
+- Perspective has keystone sliders, not free corners;
+- no tiled rendering for photos larger than the GPU's maximum texture size.
 
-Scaffolding is done (see `architecture.md`). The backend builds, runs, and tests (0 tests) with bare `kotlinc` 2.4.20 on JDK 25. The jars are fetched and verified. The frontend shell renders (checked in headless Chrome). The mini-gl seed is committed verbatim, with license notices.
+## Working on it
 
-## Phase 3 status (2026-10-02)
-
-The backend skeleton is done (see `architecture.md`). `run.sh` serves `/api/health` and the frontend. 20 tests pass, and the server was smoke-tested over real HTTP and in headless Chrome.
-
-## Phase 4 status (2026-10-02)
-
-Accounts are done. The human chose `shelf`-style auth. Register, login, logout, and me work against real Postgres 18.6 (smoke-tested), with 46 DB-free tests passing. The `projects`/`photos` tables moved to Phase 5. See `decisions.md` and `architecture.md`. To run locally, see the Postgres one-liner in `CONTRIBUTING.md`.
-
-## Phase 5 status (2026-10-02)
-
-Projects, upload, and ingest are done:
-- **Backend:** EXIF, upright thumbnails and previews, and server-built display strings.
-- **Frontend:** the first real UI, meaning sign-in, the project list, and the project page with its upload queue and contact sheet.
-
-78 tests pass. It was smoke-tested end to end against Postgres 18.6 and in headless Chrome, including an upload through the real file picker. The smoke test caught a data-loss bug (renaming onto an empty project's name), which is now fixed with a regression test. See `decisions.md`.
-
-Phase 6 (reconciliation) is **deferred** at the human's request. See `decisions.md` for what that means in practice.
-
-## Phase 7 status (2026-10-02)
-
-Culling is done:
-- **Sidecars:** XMP sidecars are merged into, never overwritten, so darktable's edit history survives.
-- **API:** a PATCH endpoint for rating, flag, and label, with view counts in the response, plus SQL-filtered views.
-- **Keyboard and display:** a keyboard-driven contact sheet and a loupe.
-
-90 tests pass, and the full keyboard flow was verified in headless Chrome against Postgres 18.6. The smoke test caught a sidecar-bloat bug, now fixed.
-
-## Phase 8 status (2026-10-02)
-
-The edit pipeline core is done:
-- **Engine:** `gl.js` and `runner.js`, restructured from mini-gl with half-float intermediates.
-- **Tools:** Tune Image, White Balance, Curves, and Details, ported from darktable at a pinned commit. The decisions log has the table of sources and divergences.
-- **Recipes:** schema v1 with migrations.
-- **Editor UI:** opens with E, or Edit in the loupe.
-
-27 pipeline tests pass in headless Chrome. The editor was driven end to end against the real stack. **Edits aren't saved yet**: that's Phase 11.
-
-**Not yet seen on a real GPU or a real photo.** The headless runs use SwiftShader and synthetic images. The human should try the editor on their desktop and phone with real photos, checking feel, slider response, and whether a lifted sky bands (decisions log, known limitation).
-
-## Phase 9 status (2026-10-02)
-
-The geometry tools are done:
-- **Crop:** aspect presets and an interactive crop box.
-- **Rotate:** 90° turns, flip, and straighten with an auto-crop.
-- **Perspective:** vertical and horizontal keystone. This is a deliberate change from the planned four corners (see `decisions.md`).
-
-42 pipeline tests pass, and the editor was driven end to end in headless Chrome. The human is reviewing Phase 8 on real devices. Feedback on slider feel or banding may come back.
-
-## Phase 10 status (2026-10-02)
-
-Vignette and Black & White are done, both from darktable. 48 pipeline tests pass. The human has asked for Phases 11, 13, and 14 to follow tonight, with no check-ins. Phase 12 (export) is skipped.
-
-## Phase 11 status (2026-10-02)
-
-Saving edits is done: a full-resolution render in the browser, EXIF spliced in on the server, reopen, revert, and stale-save protection. 102 backend tests and 48 pipeline tests pass.
-
-## Phase 13 status (2026-10-02)
-
-Docker is done. See `docs/deployment.md`. The compose and standalone images were both smoke-tested end to end against real containers.
-
-## Phase 14 status (2026-10-02)
-
-v1 is built, except export (Phase 12, skipped). Reconciliation (Phase 6) was built afterwards, on 2026-10-03. CI exists but has never run on GitHub: there's no remote yet.
-
-**For the human:**
-- try the whole flow on a real desktop and phone with real photos;
-- create a GitHub repo and push, as with the siblings, so CI runs for real;
-- decide on the brief §5 items still open (purging rejects) and when to pick up export.
-
-Known limitations and deferred items are listed in `decisions.md` (Phase 14 entry).
-
-## Next step
-
-Whatever the human picks from the list above.
+- **Running locally:** see `../CONTRIBUTING.md` for the Postgres one-liner and `backend/run.sh`, and `deployment.md` for Docker.
+- **Headless checks:** these sessions drove the real UI through Chrome's DevTools protocol, using `chrome-headless-shell` from Chrome for Testing and Node's built-in WebSocket. That's a dev-machine tool only, and nothing in the repo depends on it. `frontend/test/run-headless.sh` needs only `python3` and a Chrome or Chromium.

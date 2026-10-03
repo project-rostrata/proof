@@ -19,7 +19,7 @@ export function emptyRecipe() {
   return { version: RECIPE_VERSION, stack: [] };
 }
 
-export function defaultsFor(toolId) {
+function defaultsFor(toolId) {
   const tool = TOOLS[toolId];
   if (!tool) throw new RecipeError(`unknown tool "${toolId}"`);
   return Object.fromEntries(tool.params.map((p) => [p.id, structuredClone(p.default)]));

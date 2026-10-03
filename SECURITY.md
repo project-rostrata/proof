@@ -25,9 +25,16 @@ deserve extra scrutiny in reports:
   outside the project's `edits/` folder, to store a non-JPEG render, or to overwrite another
   photo's edit is in scope.
 - **Authentication and cross-user access.** Accounts use PBKDF2 password hashes and HttpOnly
-  session cookies (`SameSite=Lax`, plus `Secure` when `PROOF_SECURE_COOKIES=true`). Bypassing
-  login, or reading or modifying another user's projects,
+  session cookies (`SameSite=Lax`, plus `Secure` when `PROOF_SECURE_COOKIES=true`). Registration
+  closes once the first account exists, unless `PROOF_ALLOW_REGISTRATION=true`. Repeated failed
+  sign-ins for a username are throttled. Bypassing login, the registration setting, or the
+  throttle, telling which usernames exist, or reading or modifying another user's projects,
   photos, or edits is in scope.
+- **Resource exhaustion.** Request bodies, uploads, and image dimensions are capped. A way to make
+  the server buffer or decode far more than those caps allow is in scope.
+- **Files changed outside the app.** proof re-reads its data folder (reconciliation) and never
+  follows symlinks there. A way to get it to index, serve, or write something outside a user's
+  folder through what's placed on disk is in scope.
 
 ## Supported versions
 

@@ -27,6 +27,8 @@ class UserRepository(private val database: Database) {
             mapRow = ::toRow,
         )
 
+    fun exists(): Boolean = database.queryOne("SELECT EXISTS (SELECT 1 FROM users) AS any", mapRow = { it.getBoolean("any") })
+
     fun listAll(): List<UserRow> = database.queryList("SELECT $USER_COLUMNS FROM users ORDER BY username", mapRow = ::toRow)
 
     fun findById(id: UUID): UserRow? =
