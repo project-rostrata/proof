@@ -66,7 +66,9 @@ proof/
   PROJECT_BRIEF.md  V1_PLAN.md  AGENTS.md  README.md  CONTRIBUTING.md  SECURITY.md  LICENSE
 ```
 
-## Phase 3 — Backend skeleton
+## Phase 3 — Backend skeleton — DONE
+
+Built as listed, with shelf's path-safety module (`fs/PathSafety.kt`) pulled forward from Phase 5 because the static handler already needs it. 20 tests pass, and the server was smoke-tested over real HTTP. See `docs/architecture.md`.
 
 Reuse `shelf`'s pattern directly rather than redesigning it.
 - `Router.kt` and `ApiResult.kt` (the `Ok`/`Err` sealed result and the `{"error":{"code":...,"message":...}}` envelope), copied from `shelf` with the package renamed.
@@ -81,7 +83,7 @@ Reuse `shelf`'s pattern directly rather than redesigning it.
 
 ## Phase 5 — Projects + batch upload + ingest
 
-- Project CRUD. The project name becomes a directory name, so it goes through `shelf`'s path-safety module.
+- Project CRUD. The project name becomes a directory name, so it goes through the path-safety module (`fs/PathSafety.kt`, already in place since Phase 3).
 - `POST /api/projects/{id}/photos`: one file per request, streamed to disk, with JPEG/PNG checked by magic bytes (not by extension or `Content-Type`), within the size cap.
 - An EXIF reader (hand-written TIFF IFD parser) for orientation, capture time, and camera/lens/exposure, unit-tested against a small set of real-camera fixture JPEGs that cover all 8 orientations.
 - Thumbnail (about 400 px) and preview (about 2048 px) generation with ImageIO/`Graphics2D`, using a multi-step downscale and with orientation applied, cached under `.cache/`.

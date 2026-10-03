@@ -2,7 +2,12 @@ import kotlin.system.exitProcess
 
 // Hand-rolled test runner (AGENTS.md "Testing"): calls every zero-arg top-level `test*` function in
 // the classes listed here. Add each new test file's compiled class (`<FileName>Kt`) to this list.
-private val testClasses = listOf<Class<*>>()
+private val testClasses = listOf(
+    Class.forName("RouterTestKt"),
+    Class.forName("PathSafetyTestKt"),
+    Class.forName("StaticFileHandlerTestKt"),
+    Class.forName("ServerTestKt"),
+)
 
 fun main() {
     var passed = 0

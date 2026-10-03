@@ -166,3 +166,10 @@ Snapseed sets the UX: which sliders exist, with −100…+100 ranges and a gentl
 - **Dependencies:** the same three pre-approved jars and pinned versions as `shelf` and `larder` (Postgres JDBC 42.7.13, kotlinx-serialization core/json 1.11.0), fetched and sha1-verified by `backend/lib/fetch-deps.sh`, and never committed. VanJS 1.6.1 was checked byte-identical to upstream (`vanjs-org/van` `public/van-1.6.1.js`, sha1 `8847b4b6…`).
 - **`TestMain.kt` was pulled forward from Phase 3**, so `backend/test.sh` works from the first commit (with 0 tests).
 - **The UI palette is strictly neutral grey with one safelight-amber accent.** Photo-editing UIs keep the chrome colourless, because a tinted surround biases how colour in the photo is judged. So, unlike the siblings' tinted palettes, every grey has equal R, G, and B. The accent is never placed behind a photo. Dark is the default, and light mode is supported, as in the siblings.
+
+## 2026-10-02 — Phase 3 backend skeleton choices
+
+- **Router, ApiResult, health, the static handler, and path safety are copied from `shelf`**, with the package renamed and only shelf-specific comments changed. The path-safety module was pulled forward from Phase 5, because serving `frontend/` already resolves client-supplied paths.
+- **`resolveUserPath` is renamed to `resolveUnderRoot`.** proof resolves paths against the frontend directory, a user's data directory, and project directories, not only a user's home. The algorithm and its tests are unchanged.
+- **Handler-pool threads are daemons.** `HttpServer.stop()` doesn't shut down a custom executor, so non-daemon pool threads kept the JVM alive after the end-to-end HTTP tests finished (`test.sh` hung after reporting 20/20). The JDK's `HttpServer` dispatcher thread is non-daemon and already keeps a running server alive, so daemon handler threads change nothing in production.
+- **`main()` is split into `buildRouter()` and `createServer()`**, so the HTTP tests exercise exactly the router the app builds, on an ephemeral port.

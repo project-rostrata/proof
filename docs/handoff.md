@@ -36,6 +36,10 @@ All of these are recorded in `PROJECT_BRIEF.md` §4 and `decisions.md`.
 
 Scaffolding is done (see `architecture.md`). The backend builds, runs, and tests (0 tests) with bare `kotlinc` 2.4.20 on JDK 25. The jars are fetched and verified. The frontend shell renders (checked in headless Chrome). The mini-gl seed is committed verbatim, with license notices.
 
+## Phase 3 status (2026-10-02)
+
+The backend skeleton is done (see `architecture.md`). `run.sh` serves `/api/health` and the frontend. 20 tests pass, and the server was smoke-tested over real HTTP and in headless Chrome.
+
 ## Next step
 
-Phase 3 (backend skeleton: router, `ApiResult`, health endpoint, and static file handler, reused from `shelf`). The spike was committed in `b71f680` and removed in the next commit. Use `git show b71f680 -- spike/` to see it, including the pinned upstream mini-gl files that Phase 2 copies the kept pieces from.
+Phase 4: Postgres 18.6, the migration runner, and `users`/`sessions` from `shelf`, then the `projects`/`photos` tables. **Blocked on a decision:** auth is still open in brief §5. The recommendation is `shelf`-style accounts. Ask the human before building it. The spike was committed in `b71f680` and removed in the next commit. Use `git show b71f680 -- spike/` to see it, including the pinned upstream mini-gl files that Phase 2 copies the kept pieces from.
