@@ -2,7 +2,7 @@
    inspired by the American eel (Anguilla rostrata). The values are identical to shelf's tokens.
    Unlike the siblings, the UI greys are strictly neutral (equal R, G and B): a tinted surround
    shifts how colour in a photo is judged, and the accent is never placed behind a photo. Dark
-   mode is the default, and light mode is supported. System fonts only: a self-hosted app
+   mode is the default; light mode follows the system, or the footer's switch (theme.js). System fonts only: a self-hosted app
    shouldn't phone home to a font CDN (same reasoning as shelf). */
 
 /* The loupe and the editor are always dark, whatever the system theme (a neutral dark surround
@@ -31,26 +31,26 @@
   --font-mono: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Consolas, "Liberation Mono", monospace;
 }
 
-@media (prefers-color-scheme: light) {
-  :root {
-    color-scheme: light;
+/* Light theme. theme.js sets data-theme before first paint, from the footer toggle's saved
+   choice or else the system setting, so there is no prefers-color-scheme query here. */
+:root[data-theme="light"] {
+  color-scheme: light;
 
-    --bg: #EDEDED;
-    --surface: #E4E4E4;
-    --card: #FFFFFF;
-    --border: rgba(0,0,0,0.08);
-    --border-strong: rgba(0,0,0,0.18);
+  --bg: #EDEDED;
+  --surface: #E4E4E4;
+  --card: #FFFFFF;
+  --border: rgba(0,0,0,0.08);
+  --border-strong: rgba(0,0,0,0.18);
 
-    --text-primary: #1C1C1C;
-    --text-secondary: #616161;
-    --text-tertiary: #8F8F8F;
+  --text-primary: #1C1C1C;
+  --text-secondary: #616161;
+  --text-tertiary: #8F8F8F;
 
-    --accent-fill: #5E7A32;
-    --accent-fill-hover: #4C6428;
-    --accent-on-surface: #4C6428;
+  --accent-fill: #5E7A32;
+  --accent-fill-hover: #4C6428;
+  --accent-on-surface: #4C6428;
 
-    --danger: #A83B2F;
-  }
+  --danger: #A83B2F;
 }
 
 * { box-sizing: border-box; }
@@ -90,6 +90,16 @@ h1 { margin: 0; font-size: 20px; font-weight: 600; }
 .top-bar-user { display: flex; align-items: center; gap: 12px; }
 .username { color: var(--text-secondary); font-size: 13px; }
 
+.app-footer {
+  padding: 8px 16px calc(24px + env(safe-area-inset-bottom));
+  display: flex; justify-content: center;
+}
+.theme-toggle {
+  display: inline-flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 12px;
+  background: none; border: none; border-radius: 6px; cursor: pointer;
+  font: inherit; font-size: 13px; color: var(--text-tertiary);
+}
+.theme-toggle:hover { background: var(--card); color: var(--text-primary); }
 .page { width: 100%; max-width: 1400px; margin: 0 auto; padding: 20px 16px 48px; flex-grow: 1; }
 .page.is-dragging { outline: 2px dashed var(--accent-on-surface); outline-offset: -8px; }
 .page-header { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }

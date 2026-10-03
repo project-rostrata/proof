@@ -455,3 +455,22 @@ Checked in headless Chrome, on desktop and with emulated touch at phone size:
 - `apple-touch-icon.png` is 180 px and opaque (iOS fills transparency with black): the sheet in off-white on the accent, for phone home screens.
 
 These are small committed image files, like larder's. They're not dependency artifacts, so `no-committed-binary-deps` doesn't apply.
+
+## 2026-10-03 — A light/dark switch in the footer, as in larder
+
+The human asked for larder's switch. It's ported as is:
+- `theme.js` in `<head>` sets `data-theme` before first paint, so the page never flashes the other theme. With no saved choice it follows the system setting, live.
+- `src/theme.js` mirrors the attribute into a van state for the button and saves the choice in `localStorage` under `proof-theme`. It's a per-browser convenience, not account data, so the API never sees it.
+- A `Footer` button names what it switches to, with larder's sun and moon icons (a new `src/icons.js` holding only those two).
+- `style.css`'s light tokens moved from a `prefers-color-scheme` query to `:root[data-theme="light"]`.
+
+**Two differences from larder:**
+- The footer is added once, in the signed-in app shell, rather than in each view. It shows on the projects list and the contact sheet but not on the sign-in page, which matches larder. The loupe and editor cover it and stay dark either way (2026-10-03, above).
+- A click on the switch doesn't take focus. proof's culling is keyboard-first, and otherwise Enter or Space after a click would press the switch again while also opening the loupe.
+
+Checked in headless Chrome:
+- with no saved choice, the page follows the system scheme live in both directions;
+- a click switches theme and saves it, and the saved choice survives system changes and a reload;
+- the footer sits at the bottom of the viewport;
+- Enter after a click opens the loupe without toggling again;
+- the loupe stays dark under the light theme.

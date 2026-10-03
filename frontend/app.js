@@ -5,6 +5,7 @@ import { initRouter } from "./src/router.js";
 import { handleKey } from "./src/cull.js";
 import { Toast } from "./src/components/Toast.js";
 import { TopBar } from "./src/components/TopBar.js";
+import { Footer } from "./src/components/Footer.js";
 import { Auth } from "./src/views/Auth.js";
 import { Projects } from "./src/views/Projects.js";
 import { Project } from "./src/views/Project.js";
@@ -18,7 +19,7 @@ function Root() {
     () => {
       if (!state.authChecked.val) return div({ class: "empty-state" }, "Loading…");
       if (!state.user.val) return Auth({ onSignedIn: initRouter });
-      return div({ class: "app-shell" }, TopBar(), () => (state.projectId.val ? Project() : Projects()), Editor());
+      return div({ class: "app-shell" }, TopBar(), () => (state.projectId.val ? Project() : Projects()), Footer(), Editor());
     },
   );
 }
