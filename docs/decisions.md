@@ -348,3 +348,22 @@ This reverses the Phase 2 palette entry. Phase 2 gave proof its own "darkroom sa
 - `--accent-on-surface: #93B558` for text, borders, focus, and selection on dark backgrounds, or `#4C6428` in light mode.
 
 The favicon's pick frame is green too. What stays from Phase 2 are the strictly neutral greys (equal R, G, and B), which is a photo-editing requirement rather than a branding choice: a tinted surround shifts how colour in a photo is judged.
+
+## 2026-10-03 — Clickable culling in the loupe
+
+The loupe showed a photo's rating, flag, and label but only the keyboard could change them. That left nothing to click, nothing on screen to say the keys work there, and no way to cull on a touch device. Its bar now has controls:
+- Pick and Reject toggles;
+- five stars, with a hover preview of the rating a click would set (pointer devices only, since `:hover` sticks after a tap). Clicking the current rating clears it, as `0` does;
+- colour-label dots (Red, Yellow, Green, Blue, Purple; the first four also have keys 6–9).
+
+**How they work:**
+- They go through the same `cull()` as the keys, so the optimistic update, the PATCH, and the rollback on error are shared. The tab counts update the same way.
+- Each button cancels `mousedown` so it never takes focus. Without that, Enter or Space would press the last-clicked button again, instead of the loupe's keys (Enter, arrows) doing their usual job.
+
+**Layout:** on wide screens the bar stays one row, with the filename and EXIF truncating and the key hint shown. On phones it wraps into rows with larger star targets.
+
+Checked with real mouse events in headless Chrome:
+- each control changes the server's state;
+- a second click on Pick or the current star clears it;
+- Enter after a click changes nothing;
+- focus stays on `body`, and the arrows and `3`/`P` keep working.

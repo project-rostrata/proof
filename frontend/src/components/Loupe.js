@@ -1,6 +1,6 @@
 import van from "../../lib/van-1.6.1.js";
 import { state } from "../state.js";
-import { Stars, FlagBadge, LabelDot } from "./CullBadges.js";
+import { CullControls } from "./CullControls.js";
 import { emptyNode } from "../vanHelpers.js";
 
 const { div, img, button, span, link } = van.tags;
@@ -25,12 +25,11 @@ export function Loupe() {
       button({ class: "loupe-nav loupe-next", "aria-label": "Next", disabled: index === photos.length - 1, onclick: () => step(1) }, "›"),
       div(
         { class: "loupe-info" },
-        div({ class: "loupe-cull" }, () => {
-          const p = photos[index].val; // re-render on this photo's own cull changes
-          return span({ class: "loupe-badges" }, FlagBadge(p.flag), Stars(p.rating), LabelDot(p.label));
-        }),
-        span({ class: "loupe-name" }, photo.filename),
-        span({ class: "loupe-meta" }, [photo.captureDisplay, photo.cameraDisplay, photo.exposureDisplay].filter(Boolean).join("  ·  ")),
+        CullControls(photos[index]),
+        div({ class: "loupe-details", title: [photo.filename, photo.captureDisplay, photo.cameraDisplay, photo.exposureDisplay].filter(Boolean).join("\n") },
+          span({ class: "loupe-name" }, photo.filename),
+          span({ class: "loupe-meta" }, [photo.captureDisplay, photo.cameraDisplay, photo.exposureDisplay].filter(Boolean).join("  ·  "))),
+        span({ class: "loupe-keys" }, "1–5 rate · P pick · X reject · ← → next"),
         span({ class: "loupe-position" }, `${index + 1} / ${photos.length}`),
         button({ class: "btn-primary btn-small", onclick: () => { state.editing.val = photos[index]; } }, "Edit"),
         button({ class: "btn-ghost btn-small", onclick: () => { state.loupeOpen.val = false; } }, "Close"),

@@ -237,18 +237,49 @@ label.btn-primary { position: relative; }
 .loupe-next { right: 12px; }
 .loupe-info {
   display: flex; align-items: center; gap: 16px; padding: 10px 16px; border-top: 1px solid rgba(255,255,255,.08);
-  color: #EBEBEB; font-size: 13px; flex-wrap: wrap;
+  color: #EBEBEB; font-size: 13px; flex-wrap: nowrap;
 }
-.loupe-badges { display: inline-flex; align-items: center; gap: 8px; }
-.loupe-badges .stars { font-size: 15px; }
-.loupe-name { font-family: var(--font-mono); font-size: 12px; }
-.loupe-meta { color: #9E9E9E; font-size: 12px; margin-right: auto; }
+/* clickable culling in the loupe (components/CullControls.js) */
+.cull-controls { display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.cull-toggle {
+  min-height: 34px; padding: 0 12px; border-radius: 6px; cursor: pointer; font-size: 13px;
+  background: none; border: 1px solid rgba(255,255,255,.18); color: #C8C8C8;
+}
+.cull-toggle:hover { border-color: rgba(255,255,255,.4); color: #EBEBEB; }
+.cull-pick.is-on { background: var(--accent-fill); border-color: var(--accent-fill); color: #FFFFFF; }
+.cull-reject.is-on { background: rgba(208,88,75,.18); border-color: var(--danger); color: #F08A7E; }
+.cull-stars { display: inline-flex; flex-direction: row-reverse; }
+.cull-star {
+  background: none; border: none; cursor: pointer; font-size: 22px; line-height: 1;
+  width: 32px; height: 34px; padding: 0; color: rgba(255,255,255,.22);
+}
+.cull-star.is-on { color: #EBEBEB; }
+/* Hover previews the rating a click would set: the hovered star and every star before it. Only
+   with a real pointer: on touch, :hover sticks after a tap and would hide the actual rating. */
+@media (hover: hover) {
+  .cull-stars:hover .cull-star { color: rgba(255,255,255,.22); }
+  .cull-stars .cull-star:hover, .cull-stars .cull-star:hover ~ .cull-star { color: var(--accent-on-surface); }
+}
+.cull-labels { display: inline-flex; gap: 4px; }
+.cull-label { width: 22px; height: 22px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; padding: 0; opacity: .45; }
+.cull-label:hover { opacity: .8; }
+.cull-label.is-on { opacity: 1; border-color: #EBEBEB; }
+.loupe-keys { color: #7A7A7A; font-size: 12px; white-space: nowrap; }
+@media (max-width: 1500px) { .loupe-keys { display: none; } }
+/* filename and EXIF take whatever width is left and truncate, so the bar stays one row */
+.loupe-details { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.loupe-name { font-family: var(--font-mono); font-size: 12px; margin-right: 14px; }
+.loupe-meta { color: #9E9E9E; font-size: 12px; }
 .loupe-position { color: #9E9E9E; font: 12px var(--font-mono); }
 
 @media (max-width: 800px) {
   .key-help { display: none; }
   .loupe-stage { padding: 8px; }
   .loupe-nav { display: none; }
+  .loupe-keys { display: none; }
+  .loupe-info { flex-wrap: wrap; gap: 10px; }
+  .loupe-details { flex-basis: 100%; order: -1; }
+  .cull-star { width: 36px; height: 40px; font-size: 26px; }
 }
 
 /* ---- editor: the photo on a neutral surround, controls to the side ---- */
