@@ -278,3 +278,28 @@ Missing thumbnails and previews already regenerate on demand, so the derived cac
 - **Geometry changes the working size, so each op's context is sized from its input.** Spatial tools after a crop work relative to the cropped image. That's still identical between preview and export, which is the property that matters.
 - **The editor shows a crop step's input while it's selected** (the stack before it, plus a crop box), the way Snapseed and Lightroom present cropping. Rotate and Perspective show their live result with an alignment grid. A consequence of the stack model: while adjusting a crop, edits stacked *after* it aren't visible. They reappear on Done.
 - **mini-gl's remaining seed files are gone.** `filterPerspective.js`'s homography helpers live on in `geometry.js` with their MIT notices. `filterMatrix.js` wasn't needed, because rotation is proof's own output-to-input mapping.
+
+## 2026-10-02 — Phase 10: Vignette and Black & White
+
+The human asked for the remaining phases to be done in one go, skipping Phase 12 (export).
+
+- **Vignette** is darktable's `vignette.c`:
+  - the "automatic ratio" super-ellipse, so the ellipse follows the frame;
+  - an inner radius plus a fall-off;
+  - darkening multiplicative, brightening additive.
+
+  proof's differences:
+  - the cosine ease is always on (darktable eases only when dithering), so there's no visible edge where the fall-off starts;
+  - Snapseed's *inner* brightness is added, as the inverted weight;
+  - darktable's saturation term isn't exposed.
+- **Black & White** combines three darktable modules:
+  - **Film response:** channelmixerrgb's monochrome presets. These are XYZ weights that darktable derived from the manufacturers' published spectral sensitivities, normalised so white stays white.
+  - **Lens colour filters:** monochrome.c's Lab Gaussian filter, blurred so it follows areas, not JPEG chroma noise.
+  - **Grain:** grain.c's 3-octave simplex noise with darktable's grain power spectrum and paper-response LUT.
+
+  proof's differences:
+  - **Colour filter:** it's divided by its own response to grey, so greys keep their tone and colours near the filter's hue get *lighter*. darktable's monochrome only ever darkens, and a real filter is used with exposure compensation.
+  - **Grain seed:** it's the same for every photo. darktable seeds it from the filename, but a recipe has to render identically wherever it's reopened.
+  - **Grain in previews:** it's averaged over 4 samples when the finest octave is under 4 px, as darktable does when zoomed out with its 21-sample lattice. So the downscaled preview shows what the export will look like at the same size.
+- **Brightness and contrast are shared code.** Black & White's sliders use exactly Tune's curves (`TONE_FUNCTIONS`), so the two tools respond the same way.
+- **A new parameter kind, `choice`, gets a generic button-row control** (`components/Choice.js`). Tools can opt out of the "identity at defaults" test with `identityAtDefaults: false`, as Black & White does: making a photo grey is the point of the tool.

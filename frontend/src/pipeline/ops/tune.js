@@ -33,9 +33,24 @@ import { shape, slider, allZero } from "./shared.js";
 
 const PARAMS = ["brightness", "contrast", "saturation", "ambiance", "highlights", "shadows", "warmth"];
 
+// colorbalancergb's luminance power and grey-fulcrum contrast on a normalised luminance (1.0 = sRGB
+// white), shared with Black & White. The contrast is mirrored above the fulcrum, as explained above.
+export const TONE_FUNCTIONS = `
+const float FULCRUM = 0.1845; // colorbalancergb's default contrast grey fulcrum
+float brightnessCurve(float y, float exponent) { return pow(max(y, 0.0), exponent); }
+float contrastCurve(float Y, float k) {
+  float y = min(Y, 1.0);
+  float toned = y <= FULCRUM
+    ? FULCRUM * pow(y / FULCRUM, k)
+    : 1.0 - (1.0 - FULCRUM) * pow((1.0 - y) / (1.0 - FULCRUM), k);
+  return toned + max(Y - 1.0, 0.0);
+}`;
+export const brightnessExponent = (value) => 1 / (1 + 0.6 * shape(value));
+export const contrastExponent = (value) => 1 + 0.5 * shape(value);
+
 // Warmth, then brightness: colorbalancergb's luminance power with the white fulcrum at 1
 // (Y' = Y^(1/(1+p))), keeping Yrg chromaticity constant.
-const TONE = `
+const TONE = TONE_FUNCTIONS + `
 uniform sampler2D u_image;
 uniform mat3 u_warmth;
 uniform float u_exponent;
@@ -43,7 +58,7 @@ void main() {
   vec3 rgb = texture(u_image, v_uv).rgb * u_warmth;
   if (u_exponent != 1.0) {
     vec3 Yrg = rgbToYrg(rgb);
-    Yrg.x = pow(max(Yrg.x / WHITE_Y, 0.0), u_exponent) * WHITE_Y; // white fulcrum = sRGB white
+    Yrg.x = brightnessCurve(Yrg.x / WHITE_Y, u_exponent) * WHITE_Y; // white fulcrum = sRGB white
     rgb = yrgToRgb(Yrg);
   }
   outColor = vec4(rgb, 1.0);
@@ -54,7 +69,7 @@ const LIGHTNESS = `
 uniform sampler2D u_image;
 void main() { outColor = vec4(clamp(rgbToLab(texture(u_image, v_uv).rgb).x / 100.0, 0.0, 1.0), 0.0, 0.0, 1.0); }`;
 
-const MIX = `
+const MIX = TONE_FUNCTIONS + `
 uniform sampler2D u_image;
 uniform sampler2D u_mask;
 uniform float u_shadhi;            // 1.0 when shadows or highlights are active
@@ -68,7 +83,6 @@ uniform float u_chroma;            // colorbalancergb chroma_global, -1..1
 uniform float u_vibrance;          // colorbalancergb vibrance, -1..1
 
 const float LOW_APPROXIMATION = 0.000001;
-const float FULCRUM = 0.1845;      // colorbalancergb's default contrast grey fulcrum
 
 // darktable gaussian.cl overlay() in bounded mode. a: Lab scaled to L 0..1, a/b /128.
 // b: the mask's lightness, 0..1, with zero a/b.
@@ -108,15 +122,9 @@ void main() {
   if (u_contrast != 1.0 || u_chroma != 0.0 || u_vibrance != 0.0) {
     vec3 Yrg = rgbToYrg(rgb);
     float Y = max(Yrg.x / WHITE_Y, 0.0); // 1.0 = sRGB white
-    if (u_contrast != 1.0) {
-      // colorbalancergb: Y' = fulcrum * (Y / fulcrum)^contrast, mirrored above the fulcrum so that
-      // white stays white. Continuous with matching slope at the fulcrum, and monotone.
-      float y = min(Y, 1.0);
-      float toned = y <= FULCRUM
-        ? FULCRUM * pow(y / FULCRUM, u_contrast)
-        : 1.0 - (1.0 - FULCRUM) * pow((1.0 - y) / (1.0 - FULCRUM), u_contrast);
-      Yrg.x = (toned + max(Y - 1.0, 0.0)) * WHITE_Y;
-    }
+    // colorbalancergb: Y' = fulcrum * (Y / fulcrum)^contrast, mirrored above the fulcrum so that
+    // white stays white. Continuous with matching slope at the fulcrum, and monotone.
+    if (u_contrast != 1.0) Yrg.x = contrastCurve(Y, u_contrast) * WHITE_Y;
     vec4 Ych = yrgToYch(Yrg);
     float vibrance = u_vibrance == 0.0 ? 0.0 : u_vibrance * (1.0 - pow(Ych.y, abs(u_vibrance)));
     Ych.y *= max(1.0 + u_chroma + vibrance, 0.0);
@@ -145,14 +153,14 @@ export const tune = {
     // darktable parameters, each -1..1 (shadhi's /100 scale, colorbalancergb's native range).
     const shadows = Math.max(-1, Math.min(1, shape(p.shadows) + 0.4 * ambiance));
     const highlights = Math.max(-1, Math.min(1, shape(p.highlights) - 0.4 * ambiance));
-    const brightness = 0.6 * shape(p.brightness); // colorbalancergb midtones_Y, kept inside -1..1
+    const brightness = shape(p.brightness);
     const warmth = shape(p.warmth);
 
     let toned = input;
     if (brightness !== 0 || warmth !== 0) {
       toned = ctx.pass(TONE, {
         inputs: { u_image: input },
-        uniforms: { u_warmth: whiteBalanceMatrix(50 * warmth, 0), u_exponent: 1 / (1 + brightness) },
+        uniforms: { u_warmth: whiteBalanceMatrix(50 * warmth, 0), u_exponent: brightnessExponent(p.brightness) },
         target: ctx.target(),
       });
     }
@@ -185,7 +193,7 @@ export const tune = {
         u_shadowsCcorrect: (0.5 - 0.5) * sign(2 * shadows) + 0.5,
         u_highlightsCcorrect: (0.5 - 0.5) * sign(-2 * highlights) + 0.5,
         u_compress: 0.5,
-        u_contrast: 1 + 0.5 * shape(p.contrast),
+        u_contrast: contrastExponent(p.contrast),
         u_chroma: shape(p.saturation),
         u_vibrance: 0.6 * ambiance,
       },

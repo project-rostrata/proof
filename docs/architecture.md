@@ -3,7 +3,7 @@
 A living doc: it describes the system as it exists right now, not the target design
 (`PROJECT_BRIEF.md` has that). Update it whenever a phase lands.
 
-## Current state: geometry tools (V1_PLAN.md Phase 9)
+## Current state: looks (V1_PLAN.md Phase 10)
 
 ### Edit pipeline (`frontend/src/pipeline/`)
 
@@ -31,6 +31,8 @@ preview JPEG (2048 px, upright) ──> Pipeline.setSource ──> SRGB8 texture
   | Crop | normalised rect, aspect | exact copy, output = the crop |
   | Rotate | quarter turns, flip, straighten | exact copy for turns and flips; bicubic and an auto-crop for a fine angle |
   | Perspective | vertical, horizontal keystone | bicubic homography, output fully covered |
+  | Vignette | outer brightness, inner brightness, size | 1 pass |
+  | Black & White | film, colour filter, brightness, contrast, grain | 1 pass, plus a blurred filter mask when filtered; grain is simplex noise averaged over the pixel footprint in previews |
 
   Each op gets a context sized from its own input, so tools after a crop or turn work on the new size.
 
@@ -78,7 +80,7 @@ A sidecar that can't be parsed returns 409 `SIDECAR_UNREADABLE` and is never ove
 - build scripts and jar fetching (Phase 2);
 - the mini-gl seed (not loaded until Phase 8).
 
-**Backend tests: 90**, none needing Postgres. **Pipeline tests: 42**, in `frontend/test/pipeline.html`. Backend tests added through Phase 7:
+**Backend tests: 90**, none needing Postgres. **Pipeline tests: 48**, in `frontend/test/pipeline.html`. Backend tests added through Phase 7:
 - EXIF in both byte orders, with truncation, random garbage, and a self-referencing IFD;
 - all 8 orientations, checked against an independent reference;
 - type sniffing;
@@ -88,5 +90,5 @@ A sidecar that can't be parsed returns 409 `SIDECAR_UNREADABLE` and is never ove
 - display strings;
 - XMP read/write: the darktable merge, element-form properties, XXE and broken files refused, and byte-stable rewrites.
 
-Not yet present: reconciliation (Phase 6, deferred), looks (Phase 10), saving edits (Phase 11),
+Not yet present: reconciliation (Phase 6, deferred), saving edits (Phase 11),
 export (Phase 12), `docker/` and `docs/deployment.md` (Phase 13).

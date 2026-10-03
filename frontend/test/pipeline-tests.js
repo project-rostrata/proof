@@ -74,7 +74,7 @@ test("an empty recipe renders the photo bit-identically", () => {
   check(d.max === 0, `max diff ${d.max}`);
 });
 
-for (const id of TOOL_ORDER) {
+for (const id of TOOL_ORDER.filter((t) => TOOLS[t].identityAtDefaults !== false)) {
   test(`${TOOLS[id].label} at its defaults is skipped (exact) and, forced to run, is an identity within 1 level`, () => {
     const recipe = recipeOf(newEntry(id));
     check(TOOLS[id].isIdentity(recipe.stack[0].params), "defaults not recognised as identity");
@@ -406,6 +406,61 @@ test("geometry gives the same picture at two resolutions", () => {
     n++;
   }
   check(sum / n < 4, `mean difference ${(sum / n).toFixed(2)} levels`);
+});
+
+
+// ---- looks ----
+
+test("vignette darkens the corners, leaves the centre, and inner brightness lifts the centre", () => {
+  const flat = image(400, 300, () => [150, 150, 150]);
+  const outer = render(flat, recipeOf(entry("vignette", { outer: -80 })));
+  const both = render(flat, recipeOf(entry("vignette", { outer: -80, inner: 60 })));
+  const centre = px(outer, 400, 200, 150)[1], corner = px(outer, 400, 3, 3)[1];
+  check(Math.abs(centre - 150) <= 1, `centre moved to ${centre}`);
+  check(corner < 150 - 40, `corner only ${corner}`);
+  check(px(both, 400, 200, 150)[1] > 150 + 10, `inner brightness: centre ${px(both, 400, 200, 150)[1]}`);
+  for (let x = 200; x < 399; x++) check(px(outer, 400, x + 1, 150)[1] <= px(outer, 400, x, 150)[1] + 1, `not falling off smoothly at x=${x}`);
+});
+
+test("vignette outer + lightens the edges towards white", () => {
+  const out = render(image(400, 300, () => [60, 60, 60]), recipeOf(entry("vignette", { outer: 100 })));
+  check(px(out, 400, 2, 2)[1] > 200, `corner ${px(out, 400, 2, 2)}`);
+});
+
+test("black & white is neutral, keeps black and white, and each film reads colours differently", () => {
+  const results = {};
+  for (const film of ["luminance", "hp5", "acros"]) {
+    const out = render(PATTERN, recipeOf(entry("blackwhite", { film })));
+    for (let x = 0; x < 256; x += 15) for (const row of [1, 2, 3, 4, 5]) {
+      const [r, g, b] = px(out, 256, x, row);
+      check(Math.max(r, g, b) - Math.min(r, g, b) <= 1, `${film}: not grey at (${x},${row}): ${[r, g, b]}`);
+    }
+    check(Math.max(...px(out, 256, 10, ROW.black)) <= 1 && Math.min(...px(out, 256, 10, ROW.white)) >= 254, `${film}: black/white moved`);
+    results[film] = [px(out, 256, 255, 1)[0], px(out, 256, 255, 3)[0]]; // pure red, pure blue
+  }
+  // Luminance renders red brighter than blue. The Ilford films are more blue-sensitive.
+  check(results.luminance[0] > results.luminance[1], `luminance: red ${results.luminance[0]} vs blue ${results.luminance[1]}`);
+  check(results.hp5[1] > results.luminance[1] + 10, `HP5+ blue ${results.hp5[1]} not brighter than luminance's ${results.luminance[1]}`);
+});
+
+test("a red filter darkens blues and lightens reds, but leaves greys alone", () => {
+  const scene = image(240, 80, (x) => (x < 80 ? [200, 40, 40] : x < 160 ? [40, 80, 200] : [128, 128, 128]));
+  const none = render(scene, recipeOf(entry("blackwhite", { filter: "none" })));
+  const red = render(scene, recipeOf(entry("blackwhite", { filter: "red" })));
+  const at = (pixels, x) => px(pixels, 240, x, 40)[0];
+  check(at(red, 40) > at(none, 40) + 5, `red patch ${at(none, 40)} -> ${at(red, 40)}`);
+  check(at(red, 120) < at(none, 120) - 5, `blue patch ${at(none, 120)} -> ${at(red, 120)}`);
+  check(Math.abs(at(red, 200) - at(none, 200)) <= 2, `grey patch ${at(none, 200)} -> ${at(red, 200)}`);
+});
+
+test("grain adds texture to midtones, is the same on every render, and stays finite", () => {
+  const grey = image(512, 384, () => [128, 128, 128]);
+  const a = render(grey, recipeOf(entry("blackwhite", { grain: 80 })));
+  const b = render(grey, recipeOf(entry("blackwhite", { grain: 80 })));
+  check(diff(a, b).max === 0, "grain differs between renders");
+  check(stddev(a, 512, 384) > 1.5, `grain stddev only ${stddev(a, 512, 384).toFixed(2)}`);
+  pipeline.setSource(PATTERN.canvas);
+  check(pipeline.renderToFloats(recipeOf(entry("blackwhite", { grain: 100, contrast: 100, filter: "blue" }))).values.every(Number.isFinite), "non-finite values");
 });
 
 // ---- engine invariants ----

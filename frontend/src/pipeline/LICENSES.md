@@ -84,6 +84,8 @@ darktable's licence is the same GNU GPL v3 as proof's own `/LICENSE`.
 | `curve.js` | `src/common/curve_tools.c`: monotone Hermite tangents and evaluation, and the flat-beyond-end-points sampling |
 | `ops/tune.js` | `src/iop/shadhi.c` and `data/kernels/gaussian.cl` (shadows/highlights overlay); `src/iop/colorbalancergb.c` (luminance power, grey-fulcrum contrast, chroma, vibrance) |
 | `ops/details.js` | `src/iop/sharpen.c` (unsharp mask on Lab L with a threshold) |
+| `ops/vignette.js` | `src/iop/vignette.c` (super-ellipse falloff, multiplicative darkening and additive brightening) |
+| `ops/blackwhite.js` | `src/iop/channelmixerrgb.c` (monochrome film presets), `src/iop/monochrome.c` (Lab colour filter), and `src/iop/grain.c` (simplex noise, the grain power spectrum, and the paper-response LUT) |
 
 Each file's header lists where proof's version deliberately differs (display-referred input, and
 so on). `docs/decisions.md` has the reasoning.
@@ -94,3 +96,4 @@ so on). `docs/decisions.md` has the reasoning.
   Filtering" (ECCV 2010), and He and Sun, "Fast Guided Filter" (2015).
 - **CIE daylight locus and CIE 1960 UCS**, in `color.js` (white balance): CIE 15 formulas.
 - **sRGB transfer function and the sRGB to XYZ matrices**: IEC 61966-2-1.
+- **Simplex noise**, in `ops/blackwhite.js`: Stefan Gustavson's reference implementation (public domain), as carried in darktable's grain.c.

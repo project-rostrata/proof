@@ -200,10 +200,11 @@ class PassContext {
     return vertical;
   }
 
-  // A small data texture (e.g. a curve LUT) owned by the runner and cached by `key`, so dragging a
-  // slider elsewhere doesn't rebuild it.
-  lut(key, width, build) {
-    return this.runner.lut(key, width, build);
+  // A small data texture (a curve LUT, the grain response table, a permutation table) owned by the
+  // runner and cached by `key`, so dragging a slider elsewhere doesn't rebuild it. `build` returns
+  // RGBA floats, width * height * 4.
+  lut(key, width, build, height = 1) {
+    return this.runner.lut(key, width, build, height);
   }
 }
 
@@ -247,7 +248,7 @@ export class Pipeline {
     return program;
   }
 
-  lut(key, width, build) {
+  lut(key, width, build, height = 1) {
     let texture = this.luts.get(key);
     if (!texture) {
       if (this.luts.size > 32) { // a few curves' worth; drop the oldest
@@ -255,7 +256,7 @@ export class Pipeline {
         old.destroy();
         this.luts.delete(oldKey);
       }
-      texture = new Texture(this.gl, width, 1, "rgba16f", build());
+      texture = new Texture(this.gl, width, height, "rgba16f", build());
       this.luts.set(key, texture);
     }
     return texture;

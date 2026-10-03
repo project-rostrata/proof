@@ -157,7 +157,17 @@ Verified with 42 pipeline tests and the editor driven end to end. See `docs/deci
 
 **Crop** (free and fixed aspect ratios), **Rotate/Straighten** (90° steps plus a fine angle), and **Perspective** (keystone; originally planned as 4-corner, see above), all done as an output-to-input pixel mapping. The interactive overlays on the preview are built in this phase.
 
-## Phase 10 — Looks
+## Phase 10 — Looks — DONE
+
+Both tools are ported from darktable:
+- **Vignette** (`vignette.c`): outer brightness, inner brightness, and size.
+- **Black & White**, with three sources:
+  - film responses from channelmixerrgb's monochrome presets: Neutral, Ilford HP5+, Delta 100, Delta 400, FP4+, and Fuji Acros;
+  - colour filters from monochrome.c: none, red, orange, yellow, green, and blue;
+  - brightness and contrast, shared with Tune;
+  - grain from grain.c.
+
+48 pipeline tests pass. See `docs/decisions.md`.
 
 **Vignette** and **Black & White** (color-filter presets, plus brightness, contrast, and grain).
 

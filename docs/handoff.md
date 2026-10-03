@@ -84,8 +84,15 @@ The geometry tools are done:
 
 42 pipeline tests pass, and the editor was driven end to end in headless Chrome. The human is reviewing Phase 8 on real devices. Feedback on slider feel or banding may come back.
 
+## Phase 10 status (2026-10-02)
+
+Vignette and Black & White are done, both from darktable. 48 pipeline tests pass. The human has asked for Phases 11, 13, and 14 to follow tonight, with no check-ins. Phase 12 (export) is skipped.
+
 ## Next step
 
-Phase 10, looks:
-- **Vignette:** port from darktable `src/iop/vignette.c`.
-- **Black & White:** colour-filter presets plus brightness, contrast, and grain. Port from darktable `channelmixerrgb` gray mixing or `monochrome.c`, and `grain.c`.
+Phase 11: save the render and recipe, reopen, and re-edit. In order:
+- render the *original* at full resolution in the browser;
+- JPEG-encode it;
+- `PUT /api/photos/:id/edit` (server: EXIF splice, atomic write, renditions regenerated);
+- `GET` to reopen the recipe;
+- `DELETE` to revert.

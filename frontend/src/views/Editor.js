@@ -7,6 +7,7 @@ import { aspectRatio, centredRect } from "../pipeline/geometry.js";
 import { emptyRecipe, newEntry } from "../pipeline/recipe.js";
 import { Slider } from "../components/Slider.js";
 import { CurveEditor } from "../components/CurveEditor.js";
+import { Choice } from "../components/Choice.js";
 import { CropOverlay } from "../components/CropOverlay.js";
 import { GridOverlay } from "../components/GridOverlay.js";
 import { emptyNode } from "../vanHelpers.js";
@@ -216,7 +217,11 @@ function EditorSession(photo) {
     if (tool.id === "crop") controls = CropControls(entry);
     else if (tool.id === "rotate") controls = RotateControls(entry, tool);
     else {
-      controls = tool.params.map((spec) => (spec.kind === "curves" ? CurveEditor(entry.params[spec.id], scheduleRender) : Slider(spec, entry.params, scheduleRender)));
+      controls = tool.params.map((spec) => {
+        if (spec.kind === "curves") return CurveEditor(entry.params[spec.id], scheduleRender);
+        if (spec.kind === "choice") return Choice(spec, entry.params, scheduleRender);
+        return Slider(spec, entry.params, scheduleRender);
+      });
       controls.push(p({ class: "editor-hint" }, "Double-click a slider to reset it."));
     }
     return div(
