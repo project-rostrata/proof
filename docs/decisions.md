@@ -443,3 +443,15 @@ Checked in headless Chrome, on desktop and with emulated touch at phone size:
 - wheel notches, mouse drags both ways, a vertical drag to pick, a press on a panel row, the panel's own slider and double-click reset, and a one-finger touch drag all moved the right slider by the expected amount;
 - Compare, Crop, and Curves showed no readout and ignored the gestures;
 - the saved recipe held exactly the gesture-set values.
+
+## 2026-10-03 — Favicon: fixed, redrawn in the family style, with fallbacks
+
+**Why there was no icon.** The SVG favicon had stopped loading on the day of the accent change (2026-10-03, above). Its leading comment gained the text `--accent-on-surface`, and XML forbids a double hyphen inside a comment, so browsers dropped the whole file without any error. larder had exactly the same bug once. Loading both versions in headless Chrome confirmed it: the old file fails, the new one loads. The new file's comment warns about it, as larder's does.
+
+**The new design** follows the siblings: one flat silhouette in the accent on a transparent background (shelf's folder, press's printer, larder's book). proof's is a contact sheet, a plate of four frames with the top-right one filled in as the pick. It keeps the old icon's idea and reads clearly at 16 px. The old icon was a near-black tile with grey frames, which also vanished on a dark tab bar. As in larder, a `prefers-color-scheme` query switches to the lighter accent (`#93B558`) on dark tab bars.
+
+**Fallbacks**, made the same way as larder's and linked from `index.html`. Both are PNG renders of the same path, made in headless Chrome; there's no image tool in the repo.
+- `favicon.ico` holds 16, 32, and 48 px PNG images, in the `#5E7A32` accent, for browsers that don't use SVG icons.
+- `apple-touch-icon.png` is 180 px and opaque (iOS fills transparency with black): the sheet in off-white on the accent, for phone home screens.
+
+These are small committed image files, like larder's. They're not dependency artifacts, so `no-committed-binary-deps` doesn't apply.

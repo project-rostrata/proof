@@ -1,10 +1,12 @@
-<!-- A 2x2 contact sheet: four frames, one marked as the pick in the house olive accent, in its
-     on-dark tone (--accent-on-surface, #93B558) so it reads on the dark tile at 16 px. The colours
-     are hard-coded because a favicon can't reach CSS custom properties. -->
+<!-- A contact sheet (a proof sheet): a plate of four frames, with the top right one filled in as
+     the pick. One flat silhouette in the house accent, like the sibling apps' favicons, with the
+     colour hardcoded because a favicon can't reach CSS custom properties. The media query swaps
+     to the lighter dark mode accent (style.css's accent on surface) so it stays visible on a
+     dark tab bar. favicon.ico and apple-touch-icon.png are PNG renders of this same path for
+     browsers that don't use SVG icons; keep all three in sync by hand.
+     NOTE: never put a double hyphen in this comment. XML forbids it inside comments, and the
+     browser then silently drops the whole icon (this happened once here, and once in larder). -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-  <rect x="2" y="2" width="20" height="20" rx="3" fill="#1A1A1A"/>
-  <rect x="4.5" y="4.5" width="6.5" height="6.5" rx="1" fill="#9E9E9E"/>
-  <rect x="13" y="4.5" width="6.5" height="6.5" rx="1" fill="#93B558"/>
-  <rect x="4.5" y="13" width="6.5" height="6.5" rx="1" fill="#9E9E9E"/>
-  <rect x="13" y="13" width="6.5" height="6.5" rx="1" fill="#9E9E9E"/>
+  <style>path { fill: #5E7A32; } @media (prefers-color-scheme: dark) { path { fill: #93B558; } }</style>
+  <path fill-rule="evenodd" d="M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm1.5 3v5h4.5V6Zm0 7v5h4.5v-5Zm6.5 0v5h4.5v-5Z"/>
 </svg>
