@@ -206,3 +206,12 @@ This resolves brief §5. The human chose **`shelf`-style accounts** over no-auth
 - **Bug caught by the smoke test, now fixed: renaming onto an empty project's name destroyed it.** `Files.move(..., ATOMIC_MOVE)` is `rename(2)` on Linux, which silently *replaces* an empty target directory. Renaming project A to the name of an existing, empty project B replaced B's directory with A's. The database update then failed with a unique violation, so the rollback moved A back, leaving B as a row with no directory. `fs/renameDirectory` now refuses whenever the target exists, and there's a regression test for it. A tiny race remains between the existence check and the move, and is accepted for a single-user-at-a-time app.
 - **The upload queue shows per-file errors inline instead of a toast per failure.** A bad batch would otherwise stack dozens of toasts.
 - **The project list loads before it's shown,** so going back from a project never flashes stale photo counts. That was found in the headless-Chrome run.
+
+## 2026-10-02 — Phase 6 (reconciliation) deferred
+
+The human chose to skip reconciliation for now. While it's deferred, everything that enters or changes proof's tree goes through the app, and the index can't notice changes made on disk outside it. Concretely:
+- files copied into `originals/` over SMB don't appear;
+- a project folder renamed outside the app makes its photos unreachable (404) until it's renamed back;
+- XMP edits made by darktable aren't read back.
+
+Missing thumbnails and previews already regenerate on demand, so the derived cache doesn't depend on reconciliation. The data stays files-as-truth regardless: originals and the sidecars proof writes are always on disk, so reconciliation can rebuild or repair the index whenever it lands.

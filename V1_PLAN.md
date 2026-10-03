@@ -98,7 +98,13 @@ Verified with 78 tests, an API smoke test against Postgres 18.6, and a headless-
 - Thumbnail (about 400 px) and preview (about 2048 px) generation with ImageIO/`Graphics2D`, using a multi-step downscale and with orientation applied, cached under `.cache/`.
 - Frontend: a drag-and-drop or file-picker batch upload with a queue of about 3 concurrent uploads and progress per file.
 
-## Phase 6 — Reconciliation
+## Phase 6 — Reconciliation — DEFERRED
+
+Skipped for now at the human's request (2026-10-02). Until it lands:
+- **Changes made outside the app aren't picked up.** Photos or project folders added, renamed, or deleted on disk directly (over SMB, for example) don't show up in proof.
+- **Ratings from other tools aren't read.** proof *writes* XMP sidecars (Phase 7) but doesn't re-read sidecars changed by other tools such as darktable.
+
+Missing thumbnails and previews are already regenerated on demand (Phase 5), so the cache doesn't depend on this phase. See `docs/decisions.md`.
 
 Reuse `shelf`'s scanner: mtime-based change detection between disk and the index, a `ScheduledExecutorService` backstop scan, and a manual "refresh". It picks up originals or sidecars added or changed outside the app, rebuilds missing cache entries, and re-reads XMP.
 

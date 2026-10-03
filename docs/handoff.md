@@ -52,6 +52,8 @@ Projects, upload, and ingest are done:
 
 78 tests pass. It was smoke-tested end to end against Postgres 18.6 and in headless Chrome, including an upload through the real file picker. The smoke test caught a data-loss bug (renaming onto an empty project's name), which is now fixed with a regression test. See `decisions.md`.
 
+Phase 6 (reconciliation) is **deferred** at the human's request. See `decisions.md` for what that means in practice.
+
 ## Next step
 
-Phase 6: reconciliation, meaning picking up projects and photos added or changed on disk outside the app. Port it from `shelf`'s scanner. `.cache/` and `.tmp/` under `$PROOF_DATA` must be skipped, and so must any leading-dot entry. The spike was committed in `b71f680` and removed in the next commit. Use `git show b71f680 -- spike/` to see it, including the pinned upstream mini-gl files that Phase 2 copies the kept pieces from.
+Phase 7: culling, with XMP sidecars, rating/flag/label endpoints, server-side filtered views, and the keyboard-driven grid plus loupe. The spike was committed in `b71f680` and removed in the next commit. Use `git show b71f680 -- spike/` to see it, including the pinned upstream mini-gl files that Phase 2 copies the kept pieces from.
