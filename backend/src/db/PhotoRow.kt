@@ -55,3 +55,6 @@ data class NewPhoto(
 
 // A photo plus the project directory name needed to find its files on disk.
 data class OwnedPhotoRow(val photo: PhotoRow, val projectName: String)
+
+// Where a project's workflow stands (PhotoRepository.stepCounts).
+data class StepCounts(val total: Int, val picked: Int, val rejected: Int, val undecided: Int, val editedPicks: Int)

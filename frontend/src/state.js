@@ -8,14 +8,18 @@ export const state = {
   projectId: van.state(null), // the open project's id (from ?project=), or null for the project list
   projects: van.state([]), // ApiProject[], straight from GET /api/projects
 
-  // The open project, as GET /api/projects/:id/photos returned it: { project, views, view, minRating }.
+  // The open project, as GET /api/projects/:id/photos returned it: { project, views, view, minRating,
+  // steps }. `steps` says how far its workflow has got (Upload · Cull · Edit · Export).
   current: van.state(null),
   // Its photos, one van.state per photo, so a rating change re-renders one frame, not the sheet.
   photos: van.state([]),
   filter: van.state({ view: "all", minRating: 0 }), // requested view, mirrored in the URL
+  step: van.state(null), // the open project's step: "upload" | "cull" | "edit" | "export", mirrored in the URL
   selected: van.state(0), // index into photos
   loupeOpen: van.state(false),
   editing: van.state(null), // the photo state being edited (one of `photos`), or null
+  cullPass: van.state(false), // the loupe is in the cull pass: keep or reject, then on to the next undecided photo
+  editPass: van.state(false), // the editor is in the edit pass: Next saves and opens the next pick
 
   uploads: van.state([]), // in-flight and recently finished uploads, see upload.js
   error: van.state(null), // string | null, shown by the Toast component

@@ -20,6 +20,11 @@ typealias StreamHandler = (RouteContext) -> StreamResult
 // contract to fit them. StreamFailed wraps a plain Err so error cases still produce the exact same
 // JSON error envelope every other endpoint does.
 sealed class StreamResult
+
+// A FileStream whose length isn't known up front (an export ZIP being written as it's sent). It goes
+// out chunked.
+const val UNKNOWN_LENGTH = -1L
+
 data class FileStream(
     val contentType: String,
     val fileName: String,
@@ -227,7 +232,8 @@ class Router {
                     val encodedName = URLEncoder.encode(result.fileName, "UTF-8").replace("+", "%20")
                     exchange.responseHeaders.add("Content-Disposition", "attachment; filename*=UTF-8''$encodedName")
                 }
-                exchange.sendResponseHeaders(200, result.contentLength)
+                // 0 means chunked to HttpServer, which is what an unknown length needs.
+                exchange.sendResponseHeaders(200, if (result.contentLength == UNKNOWN_LENGTH) 0 else result.contentLength)
                 result.write(exchange.responseBody)
             }
         }

@@ -1,3 +1,6 @@
+import proof.api.FileStream
+import proof.api.Router
+import proof.api.UNKNOWN_LENGTH
 import proof.auth.AuthConfig
 import proof.db.ConnectionPool
 import proof.db.Database
@@ -123,5 +126,25 @@ fun testEveryResponseCarriesTheSecurityHeaders() = withServer { base, client ->
         assertEquals("nosniff", headers.firstValue("X-Content-Type-Options").orElse(null), path)
         assertEquals("DENY", headers.firstValue("X-Frame-Options").orElse(null), path)
         assertEquals("same-origin", headers.firstValue("Referrer-Policy").orElse(null), path)
+    }
+}
+
+// A stream with no known length (the export ZIP) goes out chunked and arrives whole.
+fun testAStreamOfUnknownLengthArrivesWhole() {
+    val router = Router()
+    val payload = ByteArray(300_000) { (it % 251).toByte() }
+    router.getStream("/api/stream") { _ -> FileStream("application/octet-stream", "x.bin", UNKNOWN_LENGTH, asAttachment = true) { it.write(payload) } }
+    val server = createServer(0, router)
+    server.start()
+    try {
+        val response = HttpClient.newHttpClient().send(
+            HttpRequest.newBuilder(URI.create("http://127.0.0.1:${server.address.port}/api/stream")).GET().build(),
+            HttpResponse.BodyHandlers.ofByteArray(),
+        )
+        assertEquals(200, response.statusCode())
+        assertTrue(payload.contentEquals(response.body()))
+        assertEquals("attachment; filename*=UTF-8''x.bin", response.headers().firstValue("Content-Disposition").orElse(null))
+    } finally {
+        server.stop(0)
     }
 }

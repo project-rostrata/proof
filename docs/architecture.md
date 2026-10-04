@@ -7,6 +7,28 @@ A living doc: it describes the system as it exists right now, not the target des
 
 Docker images: see `deployment.md`. CI: `.github/workflows/docker-build.yml` (backend tests in Docker, pipeline tests via `frontend/test/run-headless.sh`, then the standalone image to GHCR).
 
+### Workflow: Upload · Cull · Edit · Export (2026-10-04)
+
+Steps are guided, never locked.
+- **Where the step lives:** in the URL (`?project=&step=`, plus `view` and `minRating` on the Cull step). `router.js` maps each step to what the gallery lists: Upload and Cull show all photos (Cull keeps its filter), and Edit and Export show the picks. With no step in the URL, the project opens on the API's suggestion.
+- **API:** `GET /api/projects/:id/photos` and each cull's PATCH return `steps` (`api/Steps.kt`, from `PhotoRepository.stepCounts`). That includes each step's label, `done`, a display summary, the suggested step, and the raw counts the UI uses to choose its buttons. Nothing new is stored: it's all derived from the flags and edit state.
+- **Frontend:**
+  - `components/StepBar.js`: the four steps.
+  - `views/Project.js` `StepIntro`: each step's summary and its button.
+  - `workflow.js`: the passes.
+- **Cull pass** (`state.cullPass`):
+  - the loupe with large Keep and Reject buttons, and the keys Y/P and N/X;
+  - `decide()` saves through `cull()`, then after 150 ms moves to the next undecided photo (`nextUndecided`, which wraps). Arrows and swipes move without deciding. The bar's own pick and reject are hidden, and the stars stay.
+  - When nothing is undecided, a card offers Start editing.
+- **Edit pass** (`state.editPass`):
+  - "Start editing" opens the first unedited pick.
+  - The editor's Next (desktop: Save & next) applies an open tool, saves if anything changed, and moves `state.editing` to the next pick (a new editor session), or stays put if the save fails. On the last pick it's Finish, which goes to Export.
+  - A position badge shows on the photo. Closing the editor reloads the step counts.
+- **Export** (`api/ExportHandler.kt`, `export/ExportPlan.kt`):
+  - It streams the picks as a ZIP: chunked (`FileStream` with `UNKNOWN_LENGTH`), stored uncompressed, Zip64 when large.
+  - Each entry is the render (named by `renderName`) if the pick is edited and the render exists, otherwise the original. Repeated names get " (2)". Files resolve through path safety.
+  - With no picks: 404 `NOTHING_TO_EXPORT`.
+
 ### Saved edits (Phase 11)
 
 ```
@@ -171,4 +193,4 @@ For a home server that may be reachable from outside. The reasons are in `decisi
 - the reconciliation planner, and timestamp precision;
 - the login throttle, the JSON body cap, and the security headers.
 
-Not yet present: export (Phase 12, skipped for now).
+Everything in v1 is present.

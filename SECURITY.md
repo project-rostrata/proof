@@ -21,6 +21,9 @@ deserve extra scrutiny in reports:
 - **Image decoding.** Crafted JPEG/PNG/EXIF/XMP input that causes excessive memory use, a
   hang, or a crash in the thumbnailer, the EXIF reader, or the XMP parser (for example XML
   external entities) is in scope.
+- **Export.** `GET /api/projects/:id/export` streams a ZIP of a project's picks. A way to get
+  anything into it beyond the requesting user's own picks (another user's photos, files outside
+  the project, or a path escaping through an entry name) is in scope.
 - **Saved edits.** A save uploads a render and a recipe in one framed request. A way to write
   outside the project's `edits/` folder, to store a non-JPEG render, or to overwrite another
   photo's edit is in scope.

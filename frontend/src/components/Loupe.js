@@ -1,9 +1,34 @@
 import van from "../../lib/van-1.6.1.js";
 import { state } from "../state.js";
 import { CullControls } from "./CullControls.js";
+import { decide, cullPassComplete, endCullPass, startEditPass } from "../workflow.js";
 import { emptyNode } from "../vanHelpers.js";
 
-const { div, img, button, span } = van.tags;
+const { div, img, button, span, p, h2 } = van.tags;
+
+// Clicking a pass button mustn't move keyboard focus onto it, or Enter/Space would press it again.
+const keepFocus = (e) => e.preventDefault();
+
+// The cull pass's two big choices (workflow.js decide): each saves, then moves on to the next
+// undecided photo. The stars stay available beside them, but the pass itself is keep or reject.
+function PassChoices() {
+  return div({ class: "pass-choices" },
+    button({ class: "pass-choice is-reject", onmousedown: keepFocus, onclick: () => decide("reject"), title: "Reject (N or X)" }, "✕ Reject"),
+    button({ class: "pass-choice is-keep", onmousedown: keepFocus, onclick: () => decide("pick"), title: "Keep (Y or P)" }, "✓ Keep"));
+}
+
+// Shown over the loupe when the pass has nothing left undecided.
+const PassComplete = () => () => {
+  if (!cullPassComplete()) return "";
+  const summary = state.current.val?.steps.steps.find((s) => s.id === "cull")?.summary ?? "";
+  const picked = state.current.val?.steps.counts.picked ?? 0;
+  return div({ class: "pass-complete", role: "status" },
+    h2("All culled"),
+    p(summary),
+    div({ class: "pass-complete-actions" },
+      button({ class: "btn-ghost", onclick: endCullPass }, "Back to the gallery"),
+      picked > 0 ? button({ class: "btn-primary", onclick: startEditPass }, "Start editing") : ""));
+};
 
 // Gap between neighbouring photos while swiping, in CSS px (matches .loupe-slide in style.css).
 const SLIDE_GAP = 16;
@@ -29,23 +54,27 @@ export function Loupe() {
       img({ class: "loupe-image", src: () => photos[i].val.previewUrl, alt: position === "current" ? photo.filename : "", draggable: false }));
     const strip = div({ class: "loupe-strip" }, slide(index - 1, "prev"), slide(index, "current"), slide(index + 1, "next"));
     const gesture = swipeable(strip, { canStep: (d) => photos[index + d] !== undefined, step });
+    const inPass = state.cullPass.val;
+    const close = () => (inPass ? endCullPass() : (state.loupeOpen.val = false));
     return div(
-      { class: "loupe", role: "dialog", "aria-label": photo.filename },
+      { class: inPass ? "loupe is-pass" : "loupe", role: "dialog", "aria-label": photo.filename },
       // A tap beside the photo closes the loupe, but not the click some browsers send after a swipe.
-      div({ class: "loupe-stage", onclick: (e) => { if (e.target.tagName !== "IMG" && !gesture.justSwiped(e)) state.loupeOpen.val = false; } },
+      div({ class: "loupe-stage", onclick: (e) => { if (e.target.tagName !== "IMG" && !gesture.justSwiped(e)) close(); } },
         strip),
       button({ class: "loupe-nav loupe-prev", "aria-label": "Previous", disabled: index === 0, onclick: () => step(-1) }, "‹"),
       button({ class: "loupe-nav loupe-next", "aria-label": "Next", disabled: index === photos.length - 1, onclick: () => step(1) }, "›"),
+      PassComplete(),
+      inPass ? PassChoices() : "",
       div(
         { class: "loupe-info" },
         CullControls(photos[index]),
         div({ class: "loupe-details", title: [photo.filename, photo.captureDisplay, photo.cameraDisplay, photo.exposureDisplay].filter(Boolean).join("\n") },
           span({ class: "loupe-name" }, photo.filename),
           span({ class: "loupe-meta" }, [photo.captureDisplay, photo.cameraDisplay, photo.exposureDisplay].filter(Boolean).join("  ·  "))),
-        span({ class: "loupe-keys" }, "1–5 rate · P pick · X reject · ← → next"),
+        span({ class: "loupe-keys" }, inPass ? "Y keep · N reject · ← → move · 1–5 rate" : "1–5 rate · P pick · X reject · ← → next"),
         span({ class: "loupe-position" }, `${index + 1} / ${photos.length}`),
         button({ class: "btn-primary btn-small", onclick: () => { state.editing.val = photos[index]; } }, "Edit"),
-        button({ class: "btn-ghost btn-small", onclick: () => { state.loupeOpen.val = false; } }, "Close"),
+        button({ class: "btn-ghost btn-small", onclick: close }, "Close"),
       ),
     );
   };

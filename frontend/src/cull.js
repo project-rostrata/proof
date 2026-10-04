@@ -1,8 +1,10 @@
 import { state, showError } from "./state.js";
 import { api, ApiError } from "./api.js";
+import { decide, endCullPass } from "./workflow.js";
 
 // Culling keys, the Lightroom/Photo Mechanic conventions: 0-5 stars, P pick, X reject, U unflag,
-// arrows move, Enter/Space opens the loupe, Esc closes it.
+// arrows move, Enter/Space opens the loupe, Esc closes it. In the cull pass (workflow.js), Y or P
+// keeps and N or X rejects, and either moves on to the next undecided photo.
 export const KEY_HELP = "0–5 rate · P pick · X reject · U unflag · arrows move · Enter loupe · E edit · Esc close";
 
 // Optimistic: the frame updates the moment the key is pressed (it's echoing the user's own input),
@@ -12,9 +14,9 @@ export async function cull(photoState, change) {
   const before = photoState.val;
   photoState.val = { ...before, ...change };
   try {
-    const { photo, views } = await api.cull(before.id, change);
+    const { photo, views, steps } = await api.cull(before.id, change);
     photoState.val = photo;
-    state.current.val = { ...state.current.val, views };
+    state.current.val = { ...state.current.val, views, steps };
   } catch (e) {
     photoState.val = before;
     showError(e instanceof ApiError ? e.message : "Could not save that change");
@@ -47,6 +49,12 @@ export function handleKey(e) {
   const loupe = state.loupeOpen.val;
   const key = e.key;
 
+  if (loupe && state.cullPass.val) {
+    if ("yYpP".includes(key)) decide("pick");
+    else if ("nNxX".includes(key)) decide("reject");
+    else if (key === "Escape") endCullPass();
+    if ("yYpPnNxX".includes(key) || key === "Escape") return e.preventDefault();
+  }
   if (key >= "0" && key <= "5") cull(photoState, { rating: Number(key) });
   else if (key === "p" || key === "P") cull(photoState, { flag: "pick" });
   else if (key === "x" || key === "X") cull(photoState, { flag: "reject" });

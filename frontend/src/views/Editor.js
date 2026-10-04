@@ -10,6 +10,7 @@ import { emptyNode } from "../vanHelpers.js";
 import { openTool } from "./editor/tool.js";
 import { photoGestures } from "./editor/gestures.js";
 import { DesktopPanel, PhoneControls } from "./editor/controls.js";
+import { editPassPosition, leaveEditor, moveEditPass } from "../workflow.js";
 
 const { div, canvas, span, p } = van.tags;
 
@@ -25,6 +26,9 @@ const { div, canvas, span, p } = van.tags;
 // Saving renders the original at full resolution through the same recipe, JPEG-encodes it, and
 // uploads it with the recipe. The server stores both and makes thumbnails from the render.
 // Reopening loads the saved recipe, so edits stay non-destructive.
+//
+// In the edit pass (workflow.js) the editor steps through the picks: Next saves, if anything
+// changed, and opens the next pick (a new session); Finish, on the last, goes on to Export.
 //
 // The recipe is a plain object mutated in place. Only structural changes (adding, removing,
 // opening, or closing a tool) re-render the controls, so nothing is re-created mid-drag.
@@ -288,7 +292,29 @@ function EditorSession(photoState) {
   const close = () => {
     if (saving.val) return;
     if (dirty.val && !confirm("Close the editor? Your unsaved changes will be lost.")) return;
-    state.editing.val = null; // the Editor binding disposes this session
+    leaveEditor(); // clears state.editing, so the Editor binding disposes this session
+  };
+
+  // ---- the edit pass ----
+
+  // Moving on applies an open tool and saves, if anything changed. A failed save (shown as an
+  // error) stays on this photo, so nothing is lost.
+  async function moveOn(target) {
+    if (saving.val) return;
+    apply();
+    if (dirty.val) {
+      await save();
+      if (dirty.val) return;
+    }
+    if (target) moveEditPass(target); // a new session for that photo
+    else leaveEditor({ finished: true });
+  }
+  const position = state.editPass.val ? editPassPosition(photoState) : null;
+  const pass = position && {
+    position: `${position.index + 1} / ${position.count}`,
+    back: position.previous ? () => moveOn(position.previous) : null,
+    next: () => moveOn(position.next),
+    nextLabel: position.next ? "Next ›" : "Finish ›",
   };
   const setCompare = (on) => { if (compare.val !== on) { compare.val = on; changed(); } };
 
@@ -351,13 +377,14 @@ function EditorSession(photoState) {
     },
     frameEl,
     gestures.Readout(),
-    () => (compare.val ? span({ class: "compare-badge" }, "Original") : emptyNode()));
+    () => (compare.val ? span({ class: "compare-badge" }, "Original") : emptyNode()),
+    pass ? span({ class: "pass-badge" }, pass.position) : "");
 
   // ---- the controls ----
 
   const ui = {
     filename: photo.filename, recipe, structure, current, sheet, dirty, saving, hasSavedEdit,
-    add, open, apply, cancel, remove, edited, save, revert, close, setCompare,
+    add, open, apply, cancel, remove, edited, save, revert, close, setCompare, pass,
     setAspect, resetCrop, turn, flip,
     canSave: () => dirty.val && !saving.val && status.val.kind === "ready",
   };

@@ -118,7 +118,7 @@ HEIC (iPhone) and camera RAW are deferred to v1.5. Both need a decoder the JDK d
 - **Target browsers and devices.** Decided: current **Firefox and Chromium-based browsers on desktop and Android**. Safari, iOS, and iPadOS are out of scope for v1. The Phase 1 spike passed on Firefox for Linux desktop, Firefox for Android (Pixel 7a), and headless Chrome. Phones are supported but aren't the primary target, so the edit UI is designed for desktop first. Snapseed-style touch-first controls such as swipe-to-adjust aren't a v1 requirement.
 - **XMP sidecar naming.** Decided: **`IMG_0001.jpg.xmp`** (darktable-style). It can't collide when `IMG_0001.jpg` and `IMG_0001.png` share a project, and darktable reads it directly. Built in Phase 7.
 - **Max upload size per file.** Decided: **100 MB**, set by `PROOF_MAX_UPLOAD_BYTES` (default `100000000`). It is enforced both from `Content-Length` and while streaming.
-- **Export options.** Deferred: Phase 12 (ZIP export of picks) was skipped for now at the human's request. Saved edits are full-resolution JPEGs in `edits/`, reachable directly on disk.
+- **Export options.** Resolved (2026-10-04): the Export step downloads a ZIP of the picks, each pick's saved edit where there is one and the original otherwise. No resizing or quality options: only what's necessary.
 - **Purging rejects.** Still open, and not built. proof never deletes an original except by deleting a whole project.
 - **v1 edit tool list.** Built as proposed in section 6 (Phases 8–10), with one change: Perspective is keystone sliders rather than four-corner dragging (`docs/decisions.md`, Phase 9).
 

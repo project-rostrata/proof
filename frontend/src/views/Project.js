@@ -1,13 +1,16 @@
 import van from "../../lib/van-1.6.1.js";
 import { state } from "../state.js";
-import { navigate, setFilter } from "../router.js";
+import { navigate, setFilter, setStep } from "../router.js";
+import { api } from "../api.js";
+import { startCullPass, startEditPass } from "../workflow.js";
+import { StepBar } from "../components/StepBar.js";
 import { uploadFiles } from "../upload.js";
 import { KEY_HELP } from "../cull.js";
 import { Stars, FlagBadge } from "../components/CullBadges.js";
 import { Loupe } from "../components/Loupe.js";
 import { emptyNode } from "../vanHelpers.js";
 
-const { main, section, div, h1, span, button, input, label, img, figure, figcaption, progress, p, select, option } = van.tags;
+const { main, section, div, h1, span, button, input, label, img, figure, figcaption, progress, p, select, option, a } = van.tags;
 
 function UploadPanel() {
   return () => {
@@ -87,11 +90,48 @@ function ContactSheet() {
     const current = state.current.val;
     if (!photos.length) {
       const filtered = current && (current.view !== "all" || current.minRating > 0);
-      return p({ class: "empty-state" }, filtered
-        ? "No photos match this view."
-        : "No photos yet. Drop JPEG or PNG files anywhere on this page, or use Add photos.");
+      const picksOnly = state.step.val === "edit" || state.step.val === "export";
+      return p({ class: "empty-state" }, filtered && !picksOnly ? "No photos match this view." : picksOnly ? "No picks yet." : "No photos yet.");
     }
     return div({ class: "contact-sheet" }, ...photos.map(Frame));
+  };
+}
+
+// What each step offers, under the step bar. The counts and summaries come from the API (steps); the
+// buttons start the guided passes (workflow.js). Steps are never locked.
+function StepIntro(onFiles) {
+  return () => {
+    const current = state.current.val;
+    if (!current) return emptyNode();
+    const { counts, steps } = current.steps;
+    const summary = (id) => steps.find((step) => step.id === id).summary;
+    const action = (label, onclick, primary = true) => button({ class: primary ? "btn-primary" : "btn-ghost", onclick }, label);
+    switch (state.step.val) {
+      case "upload":
+        return section({ class: "step-intro" },
+          label({ class: "drop-zone" },
+            span({ class: "drop-zone-title" }, "Drop photos here, or choose them"),
+            span({ class: "drop-zone-note" }, "JPEG or PNG. They upload in the background."),
+            input({ type: "file", multiple: true, accept: "image/jpeg,image/png", class: "visually-hidden", onchange: (e) => { onFiles(e.target.files); e.target.value = ""; } })),
+          counts.total ? div({ class: "step-actions" }, span({ class: "step-summary" }, summary("upload")), action("Start culling", startCullPass)) : "");
+      case "cull":
+        return section({ class: "step-intro" }, div({ class: "step-actions" },
+          span({ class: "step-summary" }, summary("cull")),
+          counts.undecided > 0
+            ? action(counts.picked + counts.rejected > 0 ? "Continue culling" : "Start culling", startCullPass)
+            : counts.picked > 0 ? action("Start editing", startEditPass) : ""));
+      case "edit":
+        return section({ class: "step-intro" }, div({ class: "step-actions" },
+          span({ class: "step-summary" }, counts.picked ? `${counts.picked} picks · ${summary("edit")}` : "No picks yet. Keep some photos in Cull first."),
+          counts.picked > 0 ? action(counts.editedPicks === 0 ? "Start editing" : counts.editedPicks < counts.picked ? "Continue editing" : "Edit again", startEditPass, counts.editedPicks < counts.picked) : "",
+          counts.picked > 0 && counts.editedPicks === counts.picked ? action("Review and export", () => setStep("export")) : ""));
+      case "export":
+        return section({ class: "step-intro" }, div({ class: "step-actions" },
+          span({ class: "step-summary" }, counts.picked ? `${summary("export")}: saved edits where there are any, the rest as shot` : "No picks yet. Keep some photos in Cull first."),
+          counts.picked > 0 ? a({ class: "btn-primary", href: api.exportUrl(state.projectId.val), download: "" }, "Download ZIP") : ""));
+      default:
+        return emptyNode();
+    }
   };
 }
 
@@ -102,6 +142,7 @@ export function Project() {
   return main(
     {
       class: () => `page${dragging.val ? " is-dragging" : ""}`,
+      // Photos can be dropped on any step; they upload into the project the same way.
       ondragover: (e) => { e.preventDefault(); dragging.val = true; },
       ondragleave: (e) => { if (e.target === e.currentTarget) dragging.val = false; },
       ondrop: (e) => { e.preventDefault(); dragging.val = false; onFiles(e.dataTransfer.files); },
@@ -115,14 +156,11 @@ export function Project() {
           ? div({ class: "page-title" }, h1(current.project.name), span({ class: "page-subtitle" }, current.project.photoCountDisplay))
           : div({ class: "page-title" }, h1("Loading…"));
       },
-      label(
-        { class: "btn-primary" },
-        "Add photos",
-        input({ type: "file", multiple: true, accept: "image/jpeg,image/png", class: "visually-hidden", onchange: (e) => { onFiles(e.target.files); e.target.value = ""; } }),
-      ),
     ),
+    StepBar(),
+    StepIntro(onFiles),
     UploadPanel(),
-    FilterBar(),
+    () => (state.step.val === "cull" ? FilterBar() : emptyNode()),
     ContactSheet(),
     Loupe(),
   );

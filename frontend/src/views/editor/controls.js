@@ -111,11 +111,21 @@ export function DesktopPanel(ui) {
     div({ class: "editor-section" }, ...ToolGroups(ui)),
     div({ class: "editor-section" }, span({ class: "editor-label" }, "Edits"), Stack(ui)),
     div({ class: "editor-section editor-tool" }, ToolPanel()),
-    div({ class: "editor-footer" },
+    ui.pass ? PassFooter(ui) : div({ class: "editor-footer" },
       CompareButton(ui, "btn-ghost btn-small"),
       () => (ui.hasSavedEdit.val ? button({ class: "btn-ghost btn-small btn-danger", disabled: () => !!ui.saving.val, onclick: ui.revert }, "Revert") : emptyNode()),
       span({ class: "editor-note" }, () => ui.saving.val ?? (ui.dirty.val ? "Unsaved changes" : ui.hasSavedEdit.val ? "Saved" : "")),
       button({ class: "btn-primary btn-small editor-save", disabled: () => !ui.canSave(), onclick: ui.save }, "Save")));
+}
+
+// In the edit pass, the footer moves through the picks. Next saves first, so there's no Save.
+function PassFooter(ui) {
+  return div({ class: "editor-footer" },
+    CompareButton(ui, "btn-ghost btn-small"),
+    span({ class: "editor-note" }, () => ui.saving.val ?? ui.pass.position),
+    button({ class: "btn-ghost btn-small editor-save", disabled: () => !ui.pass.back || !!ui.saving.val, onclick: () => ui.pass.back?.() }, "‹ Back"),
+    button({ class: "btn-primary btn-small", disabled: () => !!ui.saving.val, onclick: ui.pass.next, title: "Saves this photo's edits, if any changed" },
+      ui.pass.nextLabel === "Next ›" ? "Save & next ›" : "Finish ›"));
 }
 
 // Shows the original while held (pointer), as Snapseed's compare does.
@@ -183,8 +193,14 @@ export function PhoneControls(ui) {
       button({ class: "bar-button", onclick: () => toggle("tools") }, "Tools"),
       button({ class: "bar-button", onclick: () => toggle("edits") }, ui.recipe.stack.length ? `Edits ${ui.recipe.stack.length}` : "Edits"),
       CompareButton(ui, "bar-button"),
-      button({ class: "bar-button is-primary", disabled: () => !ui.canSave(), onclick: ui.save },
-        () => ui.saving.val ?? (ui.dirty.val || !ui.hasSavedEdit.val ? "Save" : "Saved")));
+      // In the edit pass, Back and Next (which saves) replace Save.
+      ui.pass
+        ? [
+          button({ class: "bar-button bar-icon", "aria-label": "Previous pick", disabled: () => !ui.pass.back || !!ui.saving.val, onclick: () => ui.pass.back?.() }, "‹"),
+          button({ class: "bar-button is-primary", disabled: () => !!ui.saving.val, onclick: ui.pass.next }, () => (ui.saving.val ? "Saving…" : ui.pass.nextLabel)),
+        ]
+        : button({ class: "bar-button is-primary", disabled: () => !ui.canSave(), onclick: ui.save },
+          () => ui.saving.val ?? (ui.dirty.val || !ui.hasSavedEdit.val ? "Save" : "Saved")));
   };
 
   return div({ class: "editor-phone" }, Sheet(), Bar());

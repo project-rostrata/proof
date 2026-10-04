@@ -71,10 +71,10 @@ data class ApiPhoto(
 data class ApiView(val id: String, val label: String, val count: Int)
 
 @Serializable
-data class ApiProjectPhotos(val project: ApiProject, val views: List<ApiView>, val view: String, val minRating: Int, val photos: List<ApiPhoto>)
+data class ApiProjectPhotos(val project: ApiProject, val views: List<ApiView>, val view: String, val minRating: Int, val steps: ApiSteps, val photos: List<ApiPhoto>)
 
 @Serializable
-data class ApiCullResult(val photo: ApiPhoto, val views: List<ApiView>)
+data class ApiCullResult(val photo: ApiPhoto, val views: List<ApiView>, val steps: ApiSteps)
 
 // Rendition URLs carry a version (the photo's file mtime, or its edit's once Phase 11 lands), so
 // browsers can cache them forever and still pick up a regenerated thumbnail.
@@ -140,6 +140,7 @@ class PhotosHandler(
                     views = photos.viewCounts(project.id).toApi(),
                     view = view.id,
                     minRating = minRating,
+                    steps = photos.stepCounts(project.id).toApi(),
                     photos = photos.listForProject(project.id, view, minRating).map { it.toApi() },
                 ),
             ),
@@ -180,7 +181,7 @@ class PhotosHandler(
             photos.updateCull(photo.id, rating, flag, fileMtime(sidecar))
         }
         val updated = photos.findOwned(photo.id, user.id)?.photo ?: return Err(404, "NOT_FOUND", "No such photo")
-        return Ok(Json.encodeToString(ApiCullResult(updated.toApi(), photos.viewCounts(photo.projectId).toApi())))
+        return Ok(Json.encodeToString(ApiCullResult(updated.toApi(), photos.viewCounts(photo.projectId).toApi(), photos.stepCounts(photo.projectId).toApi())))
     }
 
     // POST /api/projects/:projectId/photos?filename=IMG_0001.jpg with the file as the raw body: one

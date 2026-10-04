@@ -23,6 +23,14 @@ in a plain `edits/` folder. PostgreSQL is only an index over those files.
 
 ## Features
 
+- **Four steps, Upload · Cull · Edit · Export.** A step bar shows how far a project has got
+  and suggests what's next, but any step can be opened at any time.
+  - **Cull pass:** the full view, one photo at a time. Keep or Reject (or Y and N), and it moves
+    straight on to the next undecided photo.
+  - **Edit pass:** the editor steps through the picks. Next saves your changes and opens the
+    next pick, and Finish goes on to Export.
+  - **Export:** a review gallery of the finished photos and a ZIP download (saved edits where
+    there are any, the rest as shot).
 - **Projects and batch upload.**
   - Drag in or pick a batch of JPEG/PNG photos. Three upload at once, with progress for each, and a
     100 MB cap per photo.

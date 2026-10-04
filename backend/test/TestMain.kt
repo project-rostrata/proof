@@ -24,6 +24,7 @@ private val testClasses = listOf(
     Class.forName("EditBodyTestKt"),
     Class.forName("ReconcilePlanTestKt"),
     Class.forName("LoginThrottleTestKt"),
+    Class.forName("ExportPlanTestKt"),
 )
 
 fun main() {

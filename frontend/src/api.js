@@ -39,6 +39,8 @@ export const api = {
   projectPhotos: (id, { view, minRating }) =>
     request("GET", `/api/projects/${id}/photos?${new URLSearchParams({ view, minRating: String(minRating) })}`),
   cull: (photoId, change) => request("PATCH", `/api/photos/${photoId}`, change),
+  // A link, not a fetch: the browser downloads the ZIP itself, with its own progress.
+  exportUrl: (projectId) => `/api/projects/${projectId}/export`,
   getEdit: (photoId) => request("GET", `/api/photos/${photoId}/edit`),
   revertEdit: (photoId) => request("DELETE", `/api/photos/${photoId}/edit`),
 };

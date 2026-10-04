@@ -198,9 +198,9 @@ Verified with 102 backend tests and editor runs in headless Chrome. A save produ
 - `DELETE /api/photos/{id}/edit` reverts to the original.
 - Frontend: a Save action that runs the full-resolution render and then the upload. Reopening an edited photo loads the original plus its recipe, so the stack can be edited again.
 
-## Phase 12 — Export
+## Phase 12 — Export — DONE (2026-10-04)
 
-`GET /api/projects/{id}/export?view=picks` streams a ZIP (`java.util.zip`) containing the render if the photo has been edited, otherwise the original.
+Built together with the workflow modes (Upload · Cull · Edit · Export; see `docs/decisions.md`). `GET /api/projects/{id}/export` streams a ZIP of the picks (`java.util.zip`, stored without compression, chunked). Each entry is the pick's saved edit if it has one, otherwise the original.
 
 ## Phase 13 — Docker — DONE
 

@@ -81,6 +81,22 @@ class PhotoRepository(private val database: Database) {
             mapRow = ::toRow,
         )
 
+    // How far the project's workflow has got (api/Steps.kt): undecided means neither picked nor
+    // rejected, whatever the stars.
+    fun stepCounts(projectId: UUID): StepCounts =
+        database.queryOne(
+            """
+            SELECT count(*) AS total,
+                   count(*) FILTER (WHERE ph.flag = 'pick') AS picked,
+                   count(*) FILTER (WHERE ph.flag = 'reject') AS rejected,
+                   count(*) FILTER (WHERE ph.flag = 'none') AS undecided,
+                   count(*) FILTER (WHERE ph.flag = 'pick' AND ph.has_edit) AS edited_picks
+            FROM photos ph WHERE ph.project_id = ?
+            """.trimIndent(),
+            bind = { it.setObject(1, projectId) },
+            mapRow = { rs -> StepCounts(rs.getInt("total"), rs.getInt("picked"), rs.getInt("rejected"), rs.getInt("undecided"), rs.getInt("edited_picks")) },
+        )
+
     fun viewCounts(projectId: UUID): Map<CullView, Int> {
         val counts = database.queryOne(
             "SELECT " + CullView.entries.joinToString(", ") { "count(*) FILTER (WHERE ${it.where}) AS ${it.name}" } +

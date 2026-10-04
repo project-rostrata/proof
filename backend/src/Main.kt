@@ -1,5 +1,6 @@
 import com.sun.net.httpserver.HttpServer
 import proof.api.EditsHandler
+import proof.api.ExportHandler
 import proof.api.LoginHandler
 import proof.api.LogoutHandler
 import proof.api.MeHandler
@@ -113,6 +114,7 @@ fun buildApp(
     val projectsHandler = ProjectsHandler(projects, photos, renditions, dataRoot, locks, reconciler)
     val locator = PhotoLocator(photos, dataRoot)
     val photosHandler = PhotosHandler(projects, photos, locator, renditions, renditionExecutor, dataRoot, maxUploadBytes, locks, reconciler)
+    val exportHandler = ExportHandler(projects, photos, dataRoot)
     val editsHandler = EditsHandler(photos, locator, renditions, renditionExecutor, dataRoot, maxUploadBytes, locks)
     val registerHandler = RegisterHandler(users, sessions, dataRoot, authConfig)
     val loginHandler = LoginHandler(users, sessions, authConfig, LoginThrottle())
@@ -130,6 +132,7 @@ fun buildApp(
     router.patch("/api/projects/:projectId", requireAuth(sessions, users, projectsHandler::rename))
     router.delete("/api/projects/:projectId", requireAuth(sessions, users, projectsHandler::delete))
     router.get("/api/projects/:projectId/photos", requireAuth(sessions, users, photosHandler::list))
+    router.getStream("/api/projects/:projectId/export", requireAuthStream(sessions, users, exportHandler::export))
     router.post("/api/projects/:projectId/photos", requireAuth(sessions, users, photosHandler::upload))
     router.getStream("/api/photos/:photoId/thumb", requireAuthStream(sessions, users, photosHandler.rendition(Rendition.THUMB)))
     router.getStream("/api/photos/:photoId/preview", requireAuthStream(sessions, users, photosHandler.rendition(Rendition.PREVIEW)))

@@ -662,3 +662,47 @@ The human's first try on a phone found two problems:
   - 47.5 % of the width gives exactly +100;
   - the fill follows the value either side of the mark;
   - ticks fire exactly at +100, crossing 0, landing on 0, and each new picker row, and nowhere else.
+
+## 2026-10-04 — Workflow modes: Upload · Cull · Edit · Export, and the ZIP export (Phase 12)
+
+The human wanted the open-ended project page turned into distinct modes:
+- **Upload.**
+- **Cull:** a quick yes/no pass that advances after each choice.
+- **Edit:** a pass through each pick.
+- **Export:** a final review gallery and a ZIP download.
+
+They chose:
+- **Guided, never locked.** A step bar with progress, where the next step's button is highlighted once the previous is done. Every step stays reachable, for late photos or a re-cull. A gate would have cost exactly those cases.
+- **Stars stay** as an optional extra. The pass itself is keep or reject.
+- **Next saves automatically** in the edit pass, as in Snapseed's flow. A failed save stays on the photo, so nothing is lost silently.
+
+How it's built:
+- **No new stored state.** Each step's progress is derived from what's already stored: `flag` (undecided is `none`, whatever the stars) and `has_edit`. The API computes the summaries and the suggested step (`api/Steps.kt`), per the dumb-UI rule, and returns them with every photo list and cull. Done means:
+  - Upload: there are photos;
+  - Cull: nothing undecided;
+  - Edit: every pick edited;
+  - Export: never done.
+
+  The suggestion is Upload when the project is empty, Cull while anything's undecided, and Edit after that. Export is never suggested.
+- **The step is in the URL** (`step=`), so reloads and links keep it. Edit and Export list the picks, through the API's existing `picks` view.
+- **Each pass reuses the existing machinery.** The cull pass is the loupe with two big buttons over `cull()`. The edit pass moves `state.editing` through the picks, so each photo gets a fresh editor session and GL context, exactly as opening it by hand would. The new logic is in `workflow.js`: starting each pass, `decide()`, `nextUndecided()`, and leaving the editor.
+- **Export (Phase 12):**
+  - **What's in it:** the ZIP holds the picks, each the saved render if edited, otherwise the original, as the brief proposed. It's built by a pure planner (`export/ExportPlan.kt`, tested), which also falls back to the original when a render has gone missing from disk and de-duplicates names that would collide (case-insensitively).
+  - **How it's sent:** streamed as written, through a new `UNKNOWN_LENGTH` in `FileStream`, which the router sends chunked, so nothing is staged in memory or on disk. Entries are stored, not deflated, because JPEGs don't shrink.
+  - **In the browser:** the Export step's button is a plain link, so the browser downloads it with its own progress.
+  - **Scope:** no options for size or quality. Only what's necessary.
+
+**Checked:**
+- 119 backend tests pass: the export planner, the step summaries, and a chunked stream over HTTP.
+- 45 pipeline tests pass.
+- At phone size with touch, from an empty project:
+  - it opens on Upload;
+  - uploading through the picker completes Upload;
+  - in the cull pass, Keep and Reject advance, an arrow moves without deciding, the pass wraps back to the skipped photo, and the card appears only once everything is decided;
+  - in the edit pass, Next saved the edited photo, Next with no changes saved nothing, ‹ went back, and Finish landed on Export;
+  - the review gallery shows 4 picks with 1 marked edited;
+  - Download ZIP served `Phone flow.zip`;
+  - a reload keeps the step.
+- The ZIP had 4 entries, the edited one byte-identical to its render and the rest to their originals, and passed a ZIP integrity test.
+- Another user gets 404, and no session gets 401.
+- On desktop: "Continue editing" opens the first unedited pick, the pass footer works, and Close returns to the Edit step.
