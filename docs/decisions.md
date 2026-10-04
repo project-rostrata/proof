@@ -639,3 +639,15 @@ Nine tools became six. No recipe migration was written, because nothing is deplo
 - On desktop: the panel, pressing Straighten then scrolling, Esc dropping a new layer, and Enter applying.
 
 No page errors.
+
+## 2026-10-04 — The pick direction matches Snapseed, and the phone editor is bigger
+
+The human's first try on a phone found two problems:
+- **The vertical swipe was backwards from Snapseed.** proof moved the highlight in the direction of the finger. Snapseed moves the *list* with the finger under a fixed highlight, so dragging up brings the next control down into it. proof now does the same. The step went from 32 to 40 px, close to a row of the larger list, so the list keeps pace with the finger.
+- **Everything was a little too small.** On phones only, these are now bigger:
+  - the pill and the picking list over the photo (17–18 px text);
+  - the bar (54 px tall);
+  - the sheets' buttons, rows, and stack (46–52 px targets, 16–17 px text);
+  - Curves' channel tabs and points.
+
+  The overrides sit in their own media block *after* the phone base rules, so they win at equal specificity. The desktop panel is unchanged.

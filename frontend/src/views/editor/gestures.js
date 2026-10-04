@@ -8,7 +8,8 @@ const { div, span } = van.tags;
 //   - Dragging sideways, or scrolling, changes the active slider. A drag across the whole photo is
 //     half the slider's range, and a mouse-wheel notch a fortieth (scrolling up raises it).
 //   - Dragging up or down picks the active control, from a list shown on the photo (one row per
-//     32 px). For Crop & Rotate the list includes the crop box.
+//     40 px). As in Snapseed, the list moves with the finger under a fixed highlight: dragging up
+//     brings the next control down into it. For Crop & Rotate the list includes the crop box.
 //   - While the crop box is active, the drags it uses are its own: CropOverlay stops them, so they
 //     never reach here. Everything else, even over the box, is still a gesture.
 // A drag decides its direction after 8 px and is measured from there, so the value never jumps.
@@ -16,7 +17,7 @@ const { div, span } = van.tags;
 //
 // `tool()` is the open tool (tool.js), or null when there's none or the original is being compared.
 // It must read van states, so the readout and the stage's class follow it.
-const PICK_STEP_PX = 32;
+const PICK_STEP_PX = 40;
 
 export function photoGestures(stageEl, { tool, onChange }) {
   const picking = van.state(false); // the list shows while dragging up or down
@@ -65,7 +66,7 @@ export function photoGestures(stageEl, { tool, onChange }) {
       const spec = t.activeSlider();
       if (spec && t.setValue(spec, drag.value + ((e.clientX - drag.x) * (spec.max - spec.min)) / (2 * stageEl.clientWidth))) onChange();
     } else if (drag.axis === "y") {
-      const index = Math.max(0, Math.min(t.picks.length - 1, drag.index + Math.round((e.clientY - drag.y) / PICK_STEP_PX)));
+      const index = Math.max(0, Math.min(t.picks.length - 1, drag.index - Math.round((e.clientY - drag.y) / PICK_STEP_PX)));
       t.active.val = t.picks[index].id;
     }
   });

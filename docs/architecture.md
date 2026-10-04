@@ -78,7 +78,7 @@ The files:
   - `before` is the snapshot ✕ restores.
 - **`editor/gestures.js` is adjusting on the photo:**
   - dragging sideways (or scrolling) changes the active slider;
-  - dragging up or down picks, with a list shown on the photo;
+  - dragging up or down picks, with a list shown on the photo. As in Snapseed the list moves with the finger under a fixed highlight, so dragging up selects the next control down, one per 40 px;
   - a pill shows the active pick and its value.
 
   The crop box stops the drags it uses (resizing, or moving a box smaller than the photo), and everything else reaches the gestures, so you can always swipe from Crop to Straighten.

@@ -454,4 +454,24 @@ label.btn-primary { position: relative; }
 }
 .pick-row.is-active { background: rgba(255,255,255,.9); color: #141414; }
 .pick-note { color: inherit; opacity: .6; font-size: 13px; }
+
+/* Phones, after the rules above so these win: sized for a thumb, and to read at arm's length over
+   the photo. */
+@media (max-width: 800px) {
+  .adjust-pill { font-size: 17px; padding: 8px 18px; gap: 12px; top: 14px; }
+  .adjust-list { min-width: 270px; padding: 8px; border-radius: 12px; }
+  .adjust-item { font-size: 18px; padding: 9px 14px; min-height: 40px; box-sizing: border-box; align-items: center; border-radius: 8px; }
+  .bar-button { min-height: 54px; font-size: 16px; }
+  .bar-icon { flex-basis: 54px; font-size: 24px; }
+  .editor-sheet { font-size: 16px; }
+  .sheet-title { font-size: 18px; }
+  .editor-sheet .editor-label { font-size: 13px; }
+  .editor-sheet .btn-small, .editor-sheet .tool-buttons .btn-small { min-height: 46px; padding: 0 16px; font-size: 16px; }
+  .editor-sheet .stack-select { font-size: 16px; padding: 12px 8px; }
+  .editor-sheet .stack-remove { font-size: 22px; padding: 8px 14px; }
+  .editor-sheet .editor-hint { font-size: 14px; }
+  .pick-row { min-height: 52px; font-size: 17px; }
+  .curve-editor.is-overlay .view-tab { font-size: 15px; padding: 8px 14px; }
+  .curve-editor.is-overlay .curve-point { r: 11px; }
+}
 .edited-badge { font-size: 11px; color: var(--accent-on-surface); line-height: 1; }
