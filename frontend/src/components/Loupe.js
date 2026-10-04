@@ -11,11 +11,23 @@ const keepFocus = (e) => e.preventDefault();
 
 // The cull pass's two big choices (workflow.js decide): each saves, then moves on to the next
 // undecided photo. The stars stay available beside them, but the pass itself is keep or reject.
-function PassChoices() {
+// Both show the photo's current decision, so swiping back to a decided photo shows what was chosen
+// (and choosing again changes it).
+function PassChoices(photoState) {
+  const flag = () => photoState.val.flag;
   return div({ class: "pass-choices" },
-    button({ class: "pass-choice is-reject", onmousedown: keepFocus, onclick: () => decide("reject"), title: "Reject (N or X)" }, "✕ Reject"),
-    button({ class: "pass-choice is-keep", onmousedown: keepFocus, onclick: () => decide("pick"), title: "Keep (Y or P)" }, "✓ Keep"));
+    button({ class: () => `pass-choice is-reject${flag() === "reject" ? " is-on" : ""}`, "aria-pressed": () => String(flag() === "reject"),
+      onmousedown: keepFocus, onclick: () => decide("reject"), title: "Reject (N or X)" }, "✕ Reject"),
+    button({ class: () => `pass-choice is-keep${flag() === "pick" ? " is-on" : ""}`, "aria-pressed": () => String(flag() === "pick"),
+      onmousedown: keepFocus, onclick: () => decide("pick"), title: "Keep (Y or P)" }, "✓ Keep"));
 }
+
+// On the photo, during the pass: what was decided for it, if anything.
+const PassStatus = (photoState) => () => {
+  const flag = photoState.val.flag;
+  if (flag === "none") return "";
+  return span({ class: `pass-status is-${flag}` }, flag === "pick" ? "✓ Kept" : "✕ Rejected");
+};
 
 // Shown over the loupe when the pass has nothing left undecided.
 const PassComplete = () => () => {
@@ -63,8 +75,9 @@ export function Loupe() {
         strip),
       button({ class: "loupe-nav loupe-prev", "aria-label": "Previous", disabled: index === 0, onclick: () => step(-1) }, "‹"),
       button({ class: "loupe-nav loupe-next", "aria-label": "Next", disabled: index === photos.length - 1, onclick: () => step(1) }, "›"),
+      inPass ? PassStatus(photos[index]) : "",
       PassComplete(),
-      inPass ? PassChoices() : "",
+      inPass ? PassChoices(photos[index]) : "",
       div(
         { class: "loupe-info" },
         CullControls(photos[index]),

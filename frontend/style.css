@@ -312,8 +312,17 @@ label.btn-primary { position: relative; }
   min-width: 140px; min-height: 52px; padding: 0 22px; border-radius: 10px; cursor: pointer; font: 600 17px var(--font-sans);
   background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.22); color: #EBEBEB;
 }
-.pass-choice.is-keep { background: var(--accent-fill); border-color: var(--accent-fill); color: #FFFFFF; }
-.pass-choice.is-reject:hover { border-color: var(--danger); color: #F08A7E; }
+/* Both neutral while undecided; the photo's decision fills its button. */
+.pass-choice.is-keep { border-color: var(--accent-fill); }
+.pass-choice.is-keep.is-on { background: var(--accent-fill); color: #FFFFFF; }
+.pass-choice.is-reject { border-color: rgba(208,88,75,.6); }
+.pass-choice.is-reject.is-on { background: rgba(208,88,75,.28); border-color: var(--danger); color: #F08A7E; }
+.pass-status {
+  position: absolute; top: 14px; left: 50%; transform: translateX(-50%); z-index: 1; pointer-events: none;
+  padding: 6px 14px; border-radius: 999px; font: 600 15px var(--font-sans); background: rgba(0,0,0,.65); border: 1px solid rgba(255,255,255,.15);
+}
+.pass-status.is-pick { color: #FFFFFF; border-color: var(--accent-fill); }
+.pass-status.is-reject { color: #F08A7E; border-color: var(--danger); }
 .loupe.is-pass .cull-toggle { display: none; }
 .pass-complete {
   position: absolute; z-index: 2; top: 50%; left: 50%; transform: translate(-50%, -60%); width: min(360px, calc(100% - 32px));
