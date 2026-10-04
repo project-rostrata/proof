@@ -356,6 +356,12 @@ label.btn-primary { position: relative; }
   font-size: 13px; pointer-events: none;
 }
 .adjust-value { font-family: var(--font-mono); }
+/* With a slider, the pill is also a value bar (gestures.js ValueBar): a fill from the default to the
+   value and a mark at the default. Neutral white, since it's over the photo. */
+.adjust-pill.has-bar { overflow: hidden; min-width: 220px; justify-content: space-between; }
+.adjust-pill > span { position: relative; }
+.adjust-fill { position: absolute; top: 0; bottom: 0; background: rgba(255,255,255,.26); }
+.adjust-origin { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: rgba(255,255,255,.55); }
 /* The picker: a fixed band at the centre of the photo, with the list sliding through it (gestures.js).
    The picker's top edge sits half a row above the centre, the band (drawn on top, as a bright
    outline) covers its first row, and the list is translated so the chosen row lines up with it. Rows are exactly 40 px, the drag per
@@ -461,7 +467,8 @@ label.btn-primary { position: relative; }
 /* Phones, after the rules above so these win: sized for a thumb, and to read at arm's length over
    the photo. */
 @media (max-width: 800px) {
-  .adjust-pill { font-size: 17px; padding: 8px 18px; gap: 12px; top: 14px; }
+  .adjust-pill { font-size: 17px; padding: 10px 18px; gap: 12px; top: 14px; }
+  .adjust-pill.has-bar { min-width: 260px; }
   .adjust-picker { width: 290px; }
   .adjust-item { font-size: 18px; padding: 0 14px; }
   .bar-button { min-height: 54px; font-size: 16px; }

@@ -77,9 +77,10 @@ The files:
   - `shown` holds each slider's value as a van state, shared by everything that displays it.
   - `before` is the snapshot ✕ restores.
 - **`editor/gestures.js` is adjusting on the photo:**
-  - dragging sideways (or scrolling) changes the active slider. As in Snapseed, half the photo's width takes a slider from its default to its furthest end;
+  - dragging sideways (or scrolling) changes the active slider. As in Snapseed, 47.5 % of the photo's width takes a slider from its default to its further end, so 95 % covers the whole range;
   - dragging up or down picks. As in Snapseed, a highlight band stays fixed at the centre of the photo and the whole list slides through it with the finger, pixel for pixel (rows are 40 px, the drag per control). Whichever control is in the band is selected;
-  - a pill shows the active pick and its value.
+  - a pill shows the active pick and its value, and doubles as a value bar: it fills from the slider's default to its value, with a mark at the default;
+  - haptics (`navigator.vibrate`, where supported): a tick when a slider crosses its default or reaches an end, and when a new control enters the picker's band.
 
   The crop box stops the drags it uses (resizing, or moving a box smaller than the photo), and everything else reaches the gestures, so you can always swipe from Crop to Straighten.
 - **`editor/controls.js` has the two layouts, built from shared pieces** (tool groups, the stack, the aspect and turn controls):

@@ -5,10 +5,11 @@ import { emptyNode } from "../../vanHelpers.js";
 const { div, span } = van.tags;
 
 // Adjusting on the photo, as in Snapseed: with a tool open, the photo is the control.
-//   - Dragging sideways, or scrolling, changes the active slider. As in Snapseed, a drag across
-//     half the photo's width takes a slider from its default to its furthest end (0 to ±100, or
-//     Straighten's 0 to ±45°), so one thumb stroke reaches any value. A mouse-wheel notch is a
-//     fortieth of the range (scrolling up raises it).
+//   - Dragging sideways, or scrolling, changes the active slider. As in Snapseed, one thumb stroke
+//     reaches any value: a drag across 47.5 % of the photo's width takes a slider from its default
+//     to its further end (0 to ±100, or Straighten's 0 to ±45°), so 95 % of the width covers the
+//     whole range, with a little room to spare at the edges. A mouse-wheel notch is a fortieth of
+//     the range (scrolling up raises it).
 //   - Dragging up or down picks the active control. As in Snapseed, a highlight band stays fixed
 //     at the centre of the photo and the whole list slides through it with the finger, pixel for
 //     pixel (a row is PICK_STEP_PX tall, the same as the drag per control). Whichever control is in
@@ -20,7 +21,27 @@ const { div, span } = van.tags;
 //
 // `tool()` is the open tool (tool.js), or null when there's none or the original is being compared.
 // It must read van states, so the readout and the stage's class follow it.
+//
+// Haptics: a short tick when a slider crosses its default or reaches an end, and when a new control
+// enters the picker's band. Through the Vibration API, so only where the browser supports it (Chrome
+// on Android, after the page has been touched once). Elsewhere it does nothing.
 const PICK_STEP_PX = 40; // also the row height of the list (.adjust-item in style.css)
+const FULL_RANGE_WIDTH = 0.95; // the share of the photo's width that covers a symmetric slider's whole range
+
+const tick = () => {
+  try {
+    navigator.vibrate?.(8);
+  } catch {
+    // not allowed yet (no touch so far), or not supported: no tick
+  }
+};
+
+// Whether moving a slider from `before` to `after` crossed or landed on its default, or reached an end.
+function isDetent(spec, before, after) {
+  if (after === spec.min || after === spec.max) return true;
+  const side = (v) => Math.sign(v - spec.default);
+  return side(after) !== side(before) && (side(after) === 0 || side(before) !== 0);
+}
 
 export function photoGestures(stageEl, { tool, onChange }) {
   const picking = van.state(false); // the list shows while dragging up or down
@@ -69,15 +90,21 @@ export function photoGestures(stageEl, { tool, onChange }) {
       pickPos.val = drag.index;
     } else if (drag.axis === "x") {
       const spec = t.activeSlider();
-      if (spec && t.setValue(spec, drag.value + (e.clientX - drag.x) * unitsPerPixel(spec))) onChange();
+      const before = spec && t.entry.params[spec.id];
+      if (spec && t.setValue(spec, drag.value + (e.clientX - drag.x) * unitsPerPixel(spec))) {
+        onChange();
+        if (isDetent(spec, before, t.entry.params[spec.id])) tick();
+      }
     } else if (drag.axis === "y") {
       const pos = Math.max(0, Math.min(t.picks.length - 1, drag.index - (e.clientY - drag.y) / PICK_STEP_PX));
       pickPos.val = pos;
-      t.active.val = t.picks[Math.round(pos)].id;
+      const id = t.picks[Math.round(pos)].id;
+      if (id !== t.active.val) tick();
+      t.active.val = id;
     }
   });
-  // Half the stage's width covers the distance from the default to the further end.
-  const unitsPerPixel = (spec) => Math.max(spec.max - spec.default, spec.default - spec.min) / (stageEl.clientWidth / 2);
+  // Half of FULL_RANGE_WIDTH covers the distance from the default to the further end.
+  const unitsPerPixel = (spec) => Math.max(spec.max - spec.default, spec.default - spec.min) / ((stageEl.clientWidth * FULL_RANGE_WIDTH) / 2);
 
   const endDrag = (e) => { if (drag?.id === e.pointerId) { drag = null; picking.val = false; } };
   stageEl.addEventListener("pointerup", endDrag);
@@ -96,8 +123,19 @@ export function photoGestures(stageEl, { tool, onChange }) {
           div({ class: () => (t.active.val === pick.id ? "adjust-item is-active" : "adjust-item") }, span(pick.label), value(pick)))));
     }
     const pick = t.picks.find((p) => p.id === t.active.val) ?? t.picks[0];
-    return div({ class: "adjust-pill" }, span(pick.label), value(pick));
+    return div({ class: pick.spec ? "adjust-pill has-bar" : "adjust-pill" }, pick.spec ? ValueBar(pick.spec, t.shown.get(pick.id)) : "", span(pick.label), value(pick));
   };
 
   return { Readout };
+}
+
+// The pill doubles as a value bar, as in Snapseed: it fills from the slider's default to its current
+// value, with a mark at the default when that's inside the range (0 on a ±100 slider).
+function ValueBar(spec, shown) {
+  const at = (v) => (100 * (v - spec.min)) / (spec.max - spec.min);
+  const origin = at(spec.default);
+  return [
+    div({ class: "adjust-fill", style: () => `left: ${Math.min(origin, at(shown.val))}%; width: ${Math.abs(at(shown.val) - origin)}%` }),
+    origin > 0 && origin < 100 ? div({ class: "adjust-origin", style: `left: ${origin}%` }) : "",
+  ];
 }
