@@ -1,6 +1,6 @@
 /*
-*  proof — Tune Image (Snapseed's name): brightness, contrast, saturation, ambiance, highlights,
-*  shadows, and warmth.
+*  proof — Tune (Snapseed's Tune Image, with its White Balance folded in): brightness, contrast,
+*  saturation, ambiance, highlights, shadows, temperature, and tint.
 *
 *  Contains code ported from darktable (https://github.com/darktable-org/darktable) at commit
 *  3fc4cfb252231edc687fefc469b3f7b7e2cade0a:
@@ -31,7 +31,11 @@
 import { whiteBalanceMatrix } from "../color.js";
 import { shape, slider, allZero } from "./shared.js";
 
-const PARAMS = ["brightness", "contrast", "saturation", "ambiance", "highlights", "shadows", "warmth"];
+const PARAMS = ["brightness", "contrast", "saturation", "ambiance", "highlights", "shadows", "temperature", "tint"];
+
+// Temperature ±100 shifts the assumed illuminant by up to ±80 mired along the daylight locus. Tint
+// ±100 moves it up to ±0.02 duv across the locus (+ is magenta, as in Lightroom). One CAT16 matrix
+// (color.js), applied first: white balance comes before any tone work.
 
 // colorbalancergb's luminance power and grey-fulcrum contrast on a normalised luminance (1.0 = sRGB
 // white), shared with Black & White. The contrast is mirrored above the fulcrum, as explained above.
@@ -48,14 +52,14 @@ float contrastCurve(float Y, float k) {
 export const brightnessExponent = (value) => 1 / (1 + 0.6 * shape(value));
 export const contrastExponent = (value) => 1 + 0.5 * shape(value);
 
-// Warmth, then brightness: colorbalancergb's luminance power with the white fulcrum at 1
+// White balance, then brightness: colorbalancergb's luminance power with the white fulcrum at 1
 // (Y' = Y^(1/(1+p))), keeping Yrg chromaticity constant.
 const TONE = TONE_FUNCTIONS + `
 uniform sampler2D u_image;
-uniform mat3 u_warmth;
+uniform mat3 u_whiteBalance;
 uniform float u_exponent;
 void main() {
-  vec3 rgb = texture(u_image, v_uv).rgb * u_warmth;
+  vec3 rgb = texture(u_image, v_uv).rgb * u_whiteBalance;
   if (u_exponent != 1.0) {
     vec3 Yrg = rgbToYrg(rgb);
     Yrg.x = brightnessCurve(Yrg.x / WHITE_Y, u_exponent) * WHITE_Y; // white fulcrum = sRGB white
@@ -136,7 +140,7 @@ void main() {
 
 export const tune = {
   id: "tune",
-  label: "Tune Image",
+  label: "Tune",
   params: [
     slider("brightness", "Brightness"),
     slider("contrast", "Contrast"),
@@ -144,7 +148,8 @@ export const tune = {
     slider("ambiance", "Ambiance"),
     slider("highlights", "Highlights"),
     slider("shadows", "Shadows"),
-    slider("warmth", "Warmth"),
+    slider("temperature", "Temperature"),
+    slider("tint", "Tint"),
   ],
   isIdentity: (p) => allZero(p, PARAMS),
 
@@ -154,13 +159,15 @@ export const tune = {
     const shadows = Math.max(-1, Math.min(1, shape(p.shadows) + 0.4 * ambiance));
     const highlights = Math.max(-1, Math.min(1, shape(p.highlights) - 0.4 * ambiance));
     const brightness = shape(p.brightness);
-    const warmth = shape(p.warmth);
 
     let toned = input;
-    if (brightness !== 0 || warmth !== 0) {
+    if (brightness !== 0 || p.temperature !== 0 || p.tint !== 0) {
       toned = ctx.pass(TONE, {
         inputs: { u_image: input },
-        uniforms: { u_warmth: whiteBalanceMatrix(50 * warmth, 0), u_exponent: brightnessExponent(p.brightness) },
+        uniforms: {
+          u_whiteBalance: whiteBalanceMatrix(80 * shape(p.temperature), 0.02 * shape(p.tint)),
+          u_exponent: brightnessExponent(p.brightness),
+        },
         target: ctx.target(),
       });
     }

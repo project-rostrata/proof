@@ -183,10 +183,10 @@ test("shadows +100 lifts the dark end and leaves the bright end; highlights -100
   check(Math.abs(hiDark - base.dark) < 6, `highlights moved the dark end ${base.dark.toFixed(1)} -> ${hiDark.toFixed(1)}`);
 });
 
-// ---- white balance and warmth ----
+// ---- white balance (Tune's temperature and tint) ----
 
 test("temperature + warms a grey (R > B), - cools it, at nearly constant luminance; tint + is magenta, - is green", () => {
-  const at = (params) => px(render(PATTERN, recipeOf(entry("whitebalance", params))), 256, 160, ROW.grey);
+  const at = (params) => px(render(PATTERN, recipeOf(entry("tune", params))), 256, 160, ROW.grey);
   const grey = px(PATTERN.pixels, 256, 160, ROW.grey);
   const warm = at({ temperature: 60 }), cool = at({ temperature: -60 }), magenta = at({ tint: 60 }), green = at({ tint: -60 });
   check(warm[0] > warm[2] + 8, `warm ${warm}`);
@@ -194,11 +194,6 @@ test("temperature + warms a grey (R > B), - cools it, at nearly constant luminan
   check(magenta[1] < (magenta[0] + magenta[2]) / 2 - 3, `magenta ${magenta}`);
   check(green[1] > (green[0] + green[2]) / 2 + 3, `green ${green}`);
   for (const c of [warm, cool, magenta, green]) check(Math.abs(lum(c) - lum(grey)) / lum(grey) < 0.05, `luminance ${lum(grey).toFixed(4)} -> ${lum(c).toFixed(4)} for ${c}`);
-});
-
-test("Tune's warmth warms like White Balance's temperature", () => {
-  const warm = px(render(PATTERN, recipeOf(entry("tune", { warmth: 60 }))), 256, 160, ROW.grey);
-  check(warm[0] > warm[2] + 5, `warmth 60 gave ${warm}`);
 });
 
 // ---- curves ----
@@ -315,7 +310,7 @@ function referenceTurn(src, quarterTurns, flip) {
 
 test("crop copies exactly the chosen pixels, and nothing else", () => {
   pipeline.setSource(PATTERN.canvas);
-  const { width, height, pixels } = pipeline.renderToPixels(recipeOf(entry("crop", { rect: [0.25, 0.125, 0.5, 0.75] })));
+  const { width, height, pixels } = pipeline.renderToPixels(recipeOf(entry("croprotate", { rect: [0.25, 0.125, 0.5, 0.75] })));
   check(width === 128 && height === 6, `size ${width}x${height}`);
   for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
     const got = px(pixels, width, x, y), want = px(PATTERN.pixels, 256, x + 64, y + 1);
@@ -326,7 +321,7 @@ test("crop copies exactly the chosen pixels, and nothing else", () => {
 for (const [quarterTurns, flip] of [[1, false], [2, false], [3, false], [0, true], [1, true], [3, true]]) {
   test(`rotate ${quarterTurns * 90}°${flip ? " with flip" : ""} moves every pixel exactly where it belongs`, () => {
     pipeline.setSource(LABELLED.canvas);
-    const { width, height, pixels } = pipeline.renderToPixels(recipeOf(entry("rotate", { quarterTurns, flip })));
+    const { width, height, pixels } = pipeline.renderToPixels(recipeOf(entry("croprotate", { quarterTurns, flip })));
     const ref = referenceTurn(LABELLED, quarterTurns, flip);
     check(width === ref.width && height === ref.height, `size ${width}x${height}, want ${ref.width}x${ref.height}`);
     for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
@@ -335,6 +330,20 @@ for (const [quarterTurns, flip] of [[1, false], [2, false], [3, false], [0, true
     }
   });
 }
+
+// Crop & Rotate composes its steps in one warp. The crop is chosen on the turned photo (what the
+// editor shows), so it must apply after the turn, and both stay exact copies.
+test("Crop & Rotate crops the turned photo, exactly", () => {
+  pipeline.setSource(LABELLED.canvas);
+  const { width, height, pixels } = pipeline.renderToPixels(recipeOf(entry("croprotate", { quarterTurns: 1, flip: true, rect: [0, 0, 0.5, 1] })));
+  const ref = referenceTurn(LABELLED, 1, true);
+  const wantW = Math.round(ref.width / 2);
+  check(width === wantW && height === ref.height, `size ${width}x${height}, want ${wantW}x${ref.height}`);
+  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
+    const got = px(pixels, width, x, y), want = ref.get(x, y);
+    check(got.every((v, c) => v === want[c]), `(${x},${y}) is ${got}, want ${want}`);
+  }
+});
 
 test("straighten's auto-crop never shows a blank corner, and is as large as it can be", () => {
   for (const [w, h] of [[400, 300], [300, 400], [500, 500], [1600, 400]]) {
@@ -357,7 +366,7 @@ test("a positive straighten angle turns the photo clockwise", () => {
   // A white dot right of centre on black: turning clockwise moves it down.
   const src = image(400, 300, (x, y) => (Math.hypot(x - 300, y - 150) < 6 ? [255, 255, 255] : [0, 0, 0]));
   pipeline.setSource(src.canvas);
-  const { width, height, pixels } = pipeline.renderToPixels(recipeOf(entry("rotate", { angle: 10 })));
+  const { width, height, pixels } = pipeline.renderToPixels(recipeOf(entry("croprotate", { angle: 10 })));
   let sx = 0, sy = 0, n = 0;
   for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) if (px(pixels, width, x, y)[1] > 128) { sx += x + 0.5; sy += y + 0.5; n++; }
   const cx = sx / n - width / 2, cy = sy / n - height / 2;
@@ -369,7 +378,7 @@ test("perspective vertical + straightens verticals that converge upwards, with n
   // A vertical line at a quarter of the width: after the correction it leans outwards at the top.
   const src = image(400, 300, (x) => (Math.abs(x + 0.5 - 100) < 2 ? [255, 255, 255] : [90, 90, 90]));
   pipeline.setSource(src.canvas);
-  const { width, pixels } = pipeline.renderToPixels(recipeOf(entry("perspective", { vertical: 60 })));
+  const { width, pixels } = pipeline.renderToPixels(recipeOf(entry("croprotate", { vertical: 60 })));
   const lineX = (row) => { let s = 0, n = 0; for (let x = 0; x < width; x++) if (px(pixels, width, x, row)[1] > 170) { s += x; n++; } return s / n; };
   const top = lineX(2), bottom = lineX(297);
   check(top < bottom - 10, `line at x=${top.toFixed(1)} (top) vs ${bottom.toFixed(1)} (bottom)`);
@@ -379,7 +388,7 @@ test("perspective vertical + straightens verticals that converge upwards, with n
 
 test("tools after a crop work on the cropped image (sizes follow the geometry)", () => {
   pipeline.setSource(GRADIENT.canvas);
-  const { width, height, values } = pipeline.renderToFloats(recipeOf(entry("crop", { rect: [0, 0, 0.5, 0.5] }), entry("tune", { shadows: 80 }), entry("details", { structure: 50 }), entry("rotate", { quarterTurns: 1 })));
+  const { width, height, values } = pipeline.renderToFloats(recipeOf(entry("croprotate", { rect: [0, 0, 0.5, 0.5] }), entry("tune", { shadows: 80 }), entry("details", { structure: 50 }), entry("croprotate", { quarterTurns: 1 })));
   check(width === 32 && height === 256, `size ${width}x${height}`);
   check(values.every(Number.isFinite), "non-finite values");
 });
@@ -389,7 +398,7 @@ test("geometry gives the same picture at two resolutions", () => {
     const u = x / size, v = y / (size * 0.75);
     return [Math.round(255 * u), Math.round(255 * v), Math.round(128 + 100 * Math.sin(u * 12) * Math.cos(v * 9))];
   });
-  const recipe = recipeOf(entry("crop", { rect: [0.1, 0.05, 0.8, 0.9] }), entry("rotate", { angle: 7 }), entry("perspective", { vertical: 40, horizontal: -30 }));
+  const recipe = recipeOf(entry("croprotate", { rect: [0.1, 0.05, 0.8, 0.9], angle: 7, vertical: 40, horizontal: -30 }));
   pipeline.setSource(scene(512).canvas);
   const big = pipeline.renderToPixels(recipe);
   pipeline.setSource(scene(256).canvas);
@@ -467,7 +476,7 @@ test("grain adds texture to midtones, is the same on every render, and stays fin
 
 test("rendering is deterministic, and the texture pool stops growing", () => {
   const recipe = recipeOf(...TOOL_ORDER.map((id) => entry(id, Object.fromEntries(TOOLS[id].params.filter((p) => !p.kind).map((p) => [p.id, Math.min(p.max, 40)])))),
-    entry("crop", { rect: [0.1, 0.1, 0.7, 0.8] }), entry("rotate", { quarterTurns: 1, angle: 3 }));
+    entry("croprotate", { rect: [0.1, 0.1, 0.7, 0.8], quarterTurns: 1, angle: 3 }));
   const first = render(PATTERN, recipe);
   const poolAfterFirst = pipeline.pool.size();
   for (let i = 0; i < 20; i++) pipeline.renderToPixels(recipe);
@@ -489,12 +498,11 @@ test("loadRecipe fills defaults, clamps, drops unknown params, and refuses unkno
   check(throws({ version: RECIPE_VERSION + 1, stack: [] }), "newer version accepted");
   check(throws({ stack: [] }), "missing version accepted");
   const geo = loadRecipe({ version: 1, stack: [
-    { tool: "crop", params: { rect: [0.5, 0.5, 0.9, 0.2], aspect: "7:3" } },
-    { tool: "rotate", params: { quarterTurns: 5, flip: "yes", angle: 99 } },
-  ] });
-  check(JSON.stringify(geo.stack[0].params.rect) === "[0,0,1,1]", `crop running off the image not reset: ${geo.stack[0].params.rect}`);
-  check(geo.stack[0].params.aspect === "free", "unknown aspect kept");
-  check(geo.stack[1].params.quarterTurns === 1 && geo.stack[1].params.flip === false && geo.stack[1].params.angle === 45, `rotate not normalised: ${JSON.stringify(geo.stack[1].params)}`);
+    { tool: "croprotate", params: { rect: [0.5, 0.5, 0.9, 0.2], aspect: "7:3", quarterTurns: 5, flip: "yes", angle: 99 } },
+  ] }).stack[0].params;
+  check(JSON.stringify(geo.rect) === "[0,0,1,1]", `crop running off the image not reset: ${geo.rect}`);
+  check(geo.aspect === "free", "unknown aspect kept");
+  check(geo.quarterTurns === 1 && geo.flip === false && geo.angle === 45, `turns, flip, and angle not normalised: ${JSON.stringify(geo)}`);
 });
 
 // ---- run ----

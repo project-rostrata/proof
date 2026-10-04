@@ -17,7 +17,9 @@ function svg(tag, attrs = {}) {
 // interpolation the pipeline bakes into its LUT (pipeline/curve.js), so what's drawn is what's
 // applied. Click empty space to add a point, drag to move, double-click a point to remove it.
 // The SVG is updated in place while dragging. Re-creating it would drop the pointer capture.
-export function CurveEditor(curves, onChange) {
+// With `overlay`, it's laid over the photo (phones, as in Snapseed): channels on top, curve filling
+// the rest.
+export function CurveEditor(curves, onChange, { overlay = false } = {}) {
   const channel = van.state("rgb");
   const root = svg("svg", { viewBox: `0 0 ${SIZE} ${SIZE}`, class: "curve-svg", role: "img", "aria-label": "Tone curve" });
   for (let i = 1; i < 4; i++) {
@@ -95,7 +97,7 @@ export function CurveEditor(curves, onChange) {
 
   draw();
   return div(
-    { class: "curve-editor" },
+    { class: overlay ? "curve-editor is-overlay" : "curve-editor" },
     div({ class: "curve-channels", role: "tablist" },
       ...CHANNELS.map(([id, text]) => button({
         class: () => `view-tab${channel.val === id ? " is-active" : ""}`, role: "tab",

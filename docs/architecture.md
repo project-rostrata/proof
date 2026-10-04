@@ -50,30 +50,43 @@ preview JPEG (2048 px, upright) ──> Pipeline.setSource ──> SRGB8 texture
 
   | Tool | Parameters | What it runs |
   |---|---|---|
-  | Tune Image | brightness, contrast, saturation, ambiance, highlights, shadows, warmth | 1–5 passes |
-  | White Balance | temperature, tint | 1 pass, a CAT16 matrix |
-  | Curves | RGB, red, green, blue | 1 pass, a cached 1024-entry LUT |
+  | Tune | brightness, contrast, saturation, ambiance, highlights, shadows, temperature, tint | 1–5 passes; white balance is a CAT16 matrix in the first |
   | Details | structure, sharpening | guided filter at reduced resolution, plus a small Gaussian |
-  | Crop | normalised rect, aspect | exact copy, output = the crop |
-  | Rotate | quarter turns, flip, straighten | exact copy for turns and flips; bicubic and an auto-crop for a fine angle |
-  | Perspective | vertical, horizontal keystone | bicubic homography, output fully covered |
+  | Curves | RGB, red, green, blue | 1 pass, a cached 1024-entry LUT |
+  | Crop & Rotate | normalised rect, aspect, quarter turns, flip, straighten, vertical and horizontal keystone | 1 warp pass through one composed matrix (turns and flip, keystone, straighten with its auto-crop, crop): an exact copy unless straightened or keystoned, bicubic otherwise |
   | Vignette | outer brightness, inner brightness, size | 1 pass |
   | Black & White | film, colour filter, brightness, contrast, grain | 1 pass, plus a blurred filter mask when filtered; grain is simplex noise averaged over the pixel footprint in previews |
 
   Each op gets a context sized from its own input, so tools after a crop or turn work on the new size.
 
-### Editor (`frontend/src/views/Editor.js`)
+### Editor (`frontend/src/views/Editor.js` and `views/editor/`)
 
-- **Opening:** E, or the loupe's Edit button, opens a full-screen editor on the photo's 2048 px preview. The canvas is fitted into the stage in JS (`layout()`), and overlays sit in a frame of exactly that size.
-- **What the stage shows:** a selected Crop shows its *input* (`upTo`) with a crop box (`components/CropOverlay.js`: shaded outside, rule of thirds, corner and edge handles, aspect-locked corners). Rotate and Perspective show the result up to themselves with a grid. Otherwise the whole stack. **Done** or Enter finishes a tool.
-- **Panel:** add a tool, the stack (select or remove entries), the active tool's sliders or curve editor, and Compare (hold the button or `\`).
-- **Cleanup:** one session at a time, disposed whenever `state.editing` changes. That releases the GL context and the key listeners.
-- **Re-rendering:** the recipe is mutated in place, and only structural changes re-render the panel, so sliders aren't re-created mid-drag.
-- **Adjusting on the photo (Snapseed's model):**
-  - With a tool open, scrolling over the photo or dragging across it moves the highlighted slider, and dragging up or down picks which slider is highlighted.
-  - A pill on the photo shows that slider and its value, and a list replaces it while picking.
-  - Each open slider's shown value is a `van.state` shared by the panel's `Slider` and the gestures, so either moves the other.
-  - Only plain sliders (params with no `kind`) take part, so Crop's box and Curves keep the photo to themselves.
+Snapseed's model:
+- **One tool open at a time.** You open a tool from the grouped list (`TOOL_GROUPS`: Adjust, Geometry, Looks), adjust it, and apply it (✓, Done, Enter) or discard it (✕, Cancel, Esc). Each use of a tool is one layer in the stack, and selecting a layer reopens it.
+- **Discarding** drops a new layer, or restores a reopened one's parameters and the session's unsaved flag.
+
+The files:
+- **`Editor.js` is the session:**
+  - the pipeline, save, revert, keys, and the overlays;
+  - opening, applying, and discarding tools;
+  - a live `(max-width: 800px)` query that chooses the layout.
+  - Opening: E, or the loupe's Edit button, opens a full-screen editor on the photo's 2048 px preview. The canvas is fitted into the stage in JS (`layout()`), and overlays sit in a frame of exactly that size.
+  - Cleanup: one session at a time, disposed whenever `state.editing` changes. That releases the GL context and the listeners.
+- **`editor/tool.js` is the open tool.**
+  - Its *picks* are its plain sliders, plus the crop box for Crop & Rotate. One is active.
+  - `shown` holds each slider's value as a van state, shared by everything that displays it.
+  - `before` is the snapshot ✕ restores.
+- **`editor/gestures.js` is adjusting on the photo:**
+  - dragging sideways (or scrolling) changes the active slider;
+  - dragging up or down picks, with a list shown on the photo;
+  - a pill shows the active pick and its value.
+
+  The crop box stops the drags it uses (resizing, or moving a box smaller than the photo), and everything else reaches the gestures, so you can always swipe from Crop to Straighten.
+- **`editor/controls.js` has the two layouts, built from shared pieces** (tool groups, the stack, the aspect and turn controls):
+  - **Desktop:** a panel beside the photo, with the tools, the stack, the open tool's sliders and other controls, and the footer (Compare, Revert, Save).
+  - **Phones:** the photo fills the screen, with one bar under it. With no tool open the bar is ✕, Tools, Edits, Compare, and Save. With a tool open it's ✕, the tool's name, ≡, and ✓. Tools, Edits, and ≡ open sheets over the photo. ≡ lists the picks with their values (tap to choose) and the tool's other controls. There are no sliders on phones: the photo is the slider. Curves is drawn over the photo.
+- **What the stage shows:** the whole stack, except while Crop & Rotate is open. Then it's the stack up to and including it, with its crop left out, and the crop box drawn over it (`components/CropOverlay.js`). The box takes drags only while Crop is the active pick. Otherwise its handles hide and an alignment grid shows.
+- **Re-rendering:** the recipe is mutated in place, and only structural changes (open, apply, discard, add, remove) re-render the controls, so nothing is re-created mid-drag.
 
 ### Cull (Phase 7)
 

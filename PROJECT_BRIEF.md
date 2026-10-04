@@ -132,11 +132,10 @@ HEIC (iPhone) and camera RAW are deferred to v1.5. Both need a decoder the JDK d
   - keys `0`–`5` set stars, `P`/`X` pick or reject, `U` unflags, arrow keys navigate;
   - views filtered by the API (all, picks, ≥N stars, rejects, unrated).
 - Edit, as a Snapseed subset on a non-destructive stack:
-  - **Tune Image:** brightness, contrast, saturation, ambiance, highlights, shadows, warmth.
-  - **White Balance:** temperature and tint.
+  - **Tune:** brightness, contrast, saturation, ambiance, highlights, shadows, temperature, and tint (Snapseed's Tune Image and White Balance, merged on 2026-10-04).
   - **Curves:** RGB and per-channel.
   - **Details:** structure and sharpening.
-  - **Crop** (free and fixed aspect ratios), **Rotate/Straighten**, and **Perspective**.
+  - **Crop & Rotate:** crop (free and fixed aspect ratios), quarter turns, flip, straighten, and perspective (Snapseed's Crop, Rotate, and Perspective, merged on 2026-10-04).
   - **Vignette.**
   - **Black & White:** color-filter presets, plus brightness/contrast/grain.
   - A stack view where any entry can be edited or removed, and a before/after toggle.

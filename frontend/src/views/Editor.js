@@ -1,38 +1,36 @@
 import van from "../../lib/van-1.6.1.js";
 import { state, showError } from "../state.js";
 import { Pipeline, PipelineUnsupported } from "../pipeline/runner.js";
-import { TOOLS, TOOL_ORDER } from "../pipeline/ops/index.js";
-import { ASPECT_OPTIONS } from "../pipeline/ops/crop.js";
 import { aspectRatio, centredRect } from "../pipeline/geometry.js";
 import { emptyRecipe, newEntry, loadRecipe, RecipeError } from "../pipeline/recipe.js";
 import { api, saveEdit, ApiError } from "../api.js";
-import { Slider, formatValue } from "../components/Slider.js";
 import { CurveEditor } from "../components/CurveEditor.js";
-import { Choice } from "../components/Choice.js";
 import { CropOverlay } from "../components/CropOverlay.js";
-import { GridOverlay } from "../components/GridOverlay.js";
 import { emptyNode } from "../vanHelpers.js";
+import { openTool } from "./editor/tool.js";
+import { photoGestures } from "./editor/gestures.js";
+import { DesktopPanel, PhoneControls } from "./editor/controls.js";
 
-const { div, canvas, button, span, h2, p, ol, li } = van.tags;
+const { div, canvas, span, p } = van.tags;
 
 // The edit view: a 2048 px preview of the *original* rendered live through the pipeline, plus a
-// Snapseed-style stack of tools. Rendering is the one piece of logic that runs in the browser
+// Snapseed-style stack of edits. Rendering is the one piece of logic that runs in the browser
 // (PROJECT_BRIEF.md §4).
+//
+// As in Snapseed, you open a tool, adjust it, and apply (✓, Done, Enter) or discard (✕, Cancel,
+// Esc) it, and each use of a tool is one layer in the stack. With a tool open, the photo is the
+// control (editor/gestures.js). On phones the photo fills the screen and everything else is a bar
+// and sheets. On larger screens there's a panel beside it (editor/controls.js).
 //
 // Saving renders the original at full resolution through the same recipe, JPEG-encodes it, and
 // uploads it with the recipe. The server stores both and makes thumbnails from the render.
 // Reopening loads the saved recipe, so edits stay non-destructive.
 //
-// The recipe is a plain object mutated in place. Only structural changes (adding, removing, or
-// selecting a stack entry) re-render the panel, so a slider is never re-created mid-drag.
-//
-// What the stage shows depends on the selected entry:
-//   - a crop: the stack *before* it, with a crop box on top (you're choosing what to keep);
-//   - Rotate or Perspective: the stack up to and including it, with an alignment grid;
-//   - anything else, or nothing selected: the whole stack.
-//
-// As in Snapseed, an open tool's sliders can also be worked on the photo itself (see "adjusting on
-// the photo" below).
+// The recipe is a plain object mutated in place. Only structural changes (adding, removing,
+// opening, or closing a tool) re-render the controls, so nothing is re-created mid-drag.
+
+// Phones get the full-screen layout. A live query: turning a tablet re-lays the editor out.
+const PHONE = "(max-width: 800px)";
 
 // Whatever ends an editing session (Close, Esc, or navigating away, which clears state.editing)
 // goes through this binding. So the previous session is always disposed: its GL context released
@@ -51,8 +49,6 @@ export function Editor() {
   };
 }
 
-const ASPECT_LABELS = { free: "Free", original: "Original" };
-
 function EditorSession(photoState) {
   const photo = photoState.rawVal;
   const recipe = emptyRecipe();
@@ -61,30 +57,31 @@ function EditorSession(photoState) {
   const hasSavedEdit = van.state(photo.hasEdit);
   let base = photo.editVersion; //         the saved edit this session started from (sent on save)
   let previewImage = null;
-  const structure = van.state(0); // bumped when the stack changes shape or the selection changes
-  const selected = van.state(-1);
+  const structure = van.state(0); // bumped when the stack changes shape, or a tool opens or closes
+  const current = van.state(null); // the open tool (editor/tool.js), or null
   const compare = van.state(false);
   const status = van.state({ kind: "loading" }); // loading | ready | error
+  const phoneQuery = matchMedia(PHONE);
+  const phone = van.state(phoneQuery.matches);
+  const sheet = van.state(null); // on phones, the sheet that's up: "tools", "edits", "controls", or null
   const stage = canvas({ class: "editor-canvas" });
   const overlayHost = div({ class: "editor-overlay" });
   const frameEl = div({ class: "editor-frame" }, stage, overlayHost);
   const stageEl = div({ class: "editor-stage" });
 
-  // The open tool's plain sliders, shared by its panel and the photo gestures: each one's shown value
-  // (so a gesture moves the panel's slider too), and which one the gestures move.
-  let sliders = { entry: null, specs: [], shown: new Map() };
-  const activeSlider = van.state(null);
-  const picking = van.state(false); // the list of sliders shows while dragging up or down on the photo
-
-  const selectedEntry = () => recipe.stack[selected.val];
-  const selectedTool = () => (selectedEntry() ? TOOLS[selectedEntry().tool] : null);
-
-  function renderOptions() {
-    if (compare.val) return { original: true };
-    const geometry = selectedTool()?.geometry;
-    if (geometry === "input") return { upTo: selected.val };
-    if (geometry === "grid") return { upTo: selected.val + 1 };
-    return {};
+  // What the stage shows: the whole stack, except while Crop & Rotate is open. Then it's the stack
+  // up to and including it, with its crop left out, so the crop box is drawn over the whole
+  // straightened photo (you're choosing what to keep).
+  function renderArgs() {
+    if (compare.val) return [recipe, { original: true }];
+    const t = current.val;
+    if (t?.tool.geometry === "crop") {
+      const index = recipe.stack.indexOf(t.entry);
+      const stack = recipe.stack.slice(0, index + 1);
+      stack[index] = { ...t.entry, params: { ...t.entry.params, rect: [0, 0, 1, 1] } };
+      return [{ ...recipe, stack }, {}];
+    }
+    return [recipe, {}];
   }
 
   // Fit the canvas (whose pixel size is the rendered image's) into the stage, and size the overlay
@@ -113,7 +110,7 @@ function EditorSession(photoState) {
         return;
       }
       try {
-        pipeline.renderToCanvas(recipe, renderOptions());
+        pipeline.renderToCanvas(...renderArgs());
         layout();
       } catch (e) {
         console.error(e);
@@ -147,26 +144,96 @@ function EditorSession(photoState) {
   const changed = () => { structure.val++; scheduleRender(); };
   // Every change to the recipe goes through edited(): it re-renders and marks the session unsaved.
   const edited = () => { dirty.val = true; scheduleRender(); };
-  const setSelected = (index) => {
-    selected.val = index;
-    const entry = recipe.stack[index];
-    const specs = entry ? TOOLS[entry.tool].params.filter((spec) => !spec.kind) : [];
-    sliders = { entry, specs, shown: new Map(specs.map((spec) => [spec.id, van.state(entry.params[spec.id])])) };
-    activeSlider.val = specs[0]?.id ?? null;
+
+  // ---- the stack and the open tool ----
+
+  // `wasDirty` is what ✕ puts back: discarding a tool's changes leaves the session as it was.
+  const open = (entry, isNew, wasDirty = dirty.val) => {
+    const t = openTool(entry, isNew);
+    t.wasDirty = wasDirty;
+    current.val = t;
+    sheet.val = null;
+    changed();
   };
-  const select = (index) => { setSelected(index); changed(); };
-  const add = (toolId) => { recipe.stack.push(newEntry(toolId)); dirty.val = true; select(recipe.stack.length - 1); };
+  const add = (toolId) => {
+    apply(); // a tool that's open is kept as it is
+    const wasDirty = dirty.val;
+    const entry = newEntry(toolId);
+    recipe.stack.push(entry);
+    dirty.val = true;
+    open(entry, true, wasDirty);
+  };
+  const apply = () => {
+    if (!current.val) return;
+    current.val = null;
+    changed();
+  };
+  // A new layer is dropped. An existing one gets back the parameters it had when it was opened.
+  const cancel = () => {
+    const t = current.val;
+    if (!t) return;
+    if (t.isNew) recipe.stack.splice(recipe.stack.indexOf(t.entry), 1);
+    else t.entry.params = structuredClone(t.before);
+    dirty.val = t.wasDirty;
+    current.val = null;
+    changed();
+  };
   const remove = (index) => {
-    recipe.stack.splice(index, 1);
-    setSelected(Math.min(selected.val, recipe.stack.length - 1));
+    const [removed] = recipe.stack.splice(index, 1);
+    if (current.val?.entry === removed) current.val = null;
     dirty.val = true;
     changed();
   };
 
+  // ---- Crop & Rotate's buttons (they need the stage's size) ----
+
+  let cropOverlay = null;
+  // While Crop & Rotate is open the stage shows its uncropped result, which is what the crop box is
+  // normalised to.
+  const inputSize = () => [stage.width, stage.height];
+  const geometryParams = () => current.val.entry.params;
+  const setAspect = (a) => {
+    const params = geometryParams();
+    params.aspect = a;
+    const ratio = aspectRatio(a, ...inputSize());
+    if (ratio !== null) {
+      params.rect = centredRect(ratio, ...inputSize());
+      cropOverlay?.reset(params.rect);
+    }
+    dirty.val = true;
+  };
+  const resetCrop = () => {
+    const params = geometryParams();
+    params.aspect = "free";
+    params.rect = [0, 0, 1, 1];
+    cropOverlay?.reset(params.rect);
+    dirty.val = true;
+  };
+  // A quarter turn swaps the photo's sides, so a fixed aspect is re-fitted to the turned photo.
+  const turn = (delta) => {
+    const params = geometryParams();
+    params.quarterTurns = (params.quarterTurns + delta + 4) % 4;
+    if (params.aspect !== "free") {
+      const [w, h] = inputSize();
+      params.rect = centredRect(aspectRatio(params.aspect, h, w), h, w);
+      cropOverlay?.reset(params.rect);
+    }
+    edited();
+  };
+  const flip = () => {
+    const params = geometryParams();
+    params.flip = !params.flip;
+    edited();
+  };
+
+  // ---- saving ----
+
   // Save: the original at full resolution, through exactly the preview's recipe, JPEG-encoded and
-  // uploaded with the recipe. The preview source is restored afterwards.
+  // uploaded with the recipe. The preview source is restored afterwards. An open tool is applied
+  // first, so what's saved is what's shown.
   async function save() {
     if (!pipeline || saving.val) return;
+    apply();
     saving.val = "Rendering at full resolution…";
     let restored = false;
     try {
@@ -210,21 +277,14 @@ function EditorSession(photoState) {
       base = updated.editVersion;
       hasSavedEdit.val = false;
       recipe.stack = [];
-      setSelected(-1);
+      current.val = null;
       dirty.val = false;
       changed();
     } catch (e) {
       showError(e instanceof ApiError ? e.message : "Reverting failed.");
     }
   }
-  const dispose = () => {
-    cancelAnimationFrame(frame);
-    resizeObserver.disconnect();
-    pipeline?.destroy();
-    pipeline = null;
-    document.removeEventListener("keydown", onKey);
-    document.removeEventListener("keyup", onKeyUp);
-  };
+
   const close = () => {
     if (saving.val) return;
     if (dirty.val && !confirm("Close the editor? Your unsaved changes will be lost.")) return;
@@ -232,192 +292,56 @@ function EditorSession(photoState) {
   };
   const setCompare = (on) => { if (compare.val !== on) { compare.val = on; changed(); } };
 
-  // \ shows the original while held (Lightroom's before/after key). Enter finishes the selected
-  // tool. Esc closes.
+  // ---- keys and layout changes ----
+
+  // \ shows the original while held (Lightroom's before/after key). Enter applies the open tool and
+  // Esc discards it. With no tool open, Esc closes a sheet, then the editor.
   function onKey(e) {
     if (e.target instanceof HTMLInputElement && e.target.type !== "range") return;
-    if (e.key === "Escape") { e.preventDefault(); close(); }
-    else if (e.key === "Enter" && selected.val >= 0) { e.preventDefault(); select(-1); }
+    if (e.key === "Escape") {
+      e.preventDefault();
+      if (current.val) cancel();
+      else if (sheet.val) sheet.val = null;
+      else close();
+    } else if (e.key === "Enter" && current.val) { e.preventDefault(); apply(); }
     else if (e.key === "\\" && !e.repeat) { e.preventDefault(); setCompare(true); }
   }
   function onKeyUp(e) { if (e.key === "\\") setCompare(false); }
   document.addEventListener("keydown", onKey);
   document.addEventListener("keyup", onKeyUp);
+  const onLayoutChange = () => { phone.val = phoneQuery.matches; sheet.val = null; changed(); };
+  phoneQuery.addEventListener("change", onLayoutChange);
 
-  // ---- adjusting on the photo, as in Snapseed ----
-  // With a tool open, the photo is the control. Scrolling over it, or dragging sideways, moves the
-  // highlighted slider. Dragging up or down picks which slider that is, from a list shown on the
-  // photo. A drag across the whole photo moves a slider through half its range, and a mouse-wheel
-  // notch moves it a fortieth. Crop and Curves have no plain sliders, so this does nothing there,
-  // and the photo stays theirs (Crop's box).
-
-  const PICK_STEP_PX = 32; // vertical drag per slider in the list
-  const activeSpec = () => (compare.val ? null : sliders.specs.find((spec) => spec.id === activeSlider.val));
-
-  function setSlider(spec, value) {
-    const step = spec.step ?? 1;
-    const v = Number(Math.min(spec.max, Math.max(spec.min, Math.round(value / step) * step)).toFixed(step < 1 ? 1 : 0));
-    if (v === sliders.entry.params[spec.id]) return;
-    sliders.entry.params[spec.id] = v;
-    sliders.shown.get(spec.id).val = v;
-    edited();
-  }
-
-  let wheel = { spec: null, rest: 0 }; // scrolling not yet worth a whole step
-  stageEl.addEventListener("wheel", (e) => {
-    const spec = activeSpec();
-    if (!spec || e.ctrlKey) return; // ctrl+wheel is a trackpad pinch: leave zooming to the browser
-    e.preventDefault();
-    if (wheel.spec !== spec) wheel = { spec, rest: 0 };
-    const px = e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? stageEl.clientHeight : 1);
-    wheel.rest += (-px * (spec.max - spec.min)) / 4000; // scrolling up raises the value
-    const step = spec.step ?? 1;
-    const whole = Math.trunc(wheel.rest / step) * step;
-    if (!whole) return;
-    wheel.rest -= whole;
-    setSlider(spec, sliders.entry.params[spec.id] + whole);
-  });
-
-  let drag = null;
-  stageEl.addEventListener("pointerdown", (e) => {
-    if (drag || e.button !== 0 || !activeSpec()) return;
-    drag = { id: e.pointerId, x: e.clientX, y: e.clientY, axis: null };
-  });
-  stageEl.addEventListener("pointermove", (e) => {
-    if (!drag || e.pointerId !== drag.id) return;
-    const spec = activeSpec();
-    if (!spec) return;
-    if (!drag.axis) {
-      if (Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 8) return; // not a drag yet
-      // Measured from here on, so the value doesn't jump by the dead zone.
-      drag = { ...drag, axis: Math.abs(e.clientX - drag.x) > Math.abs(e.clientY - drag.y) ? "x" : "y", x: e.clientX, y: e.clientY,
-        value: sliders.entry.params[spec.id], index: sliders.specs.indexOf(spec) };
-      stageEl.setPointerCapture(e.pointerId);
-      picking.val = drag.axis === "y";
-    } else if (drag.axis === "x") {
-      setSlider(spec, drag.value + ((e.clientX - drag.x) * (spec.max - spec.min)) / (2 * stageEl.clientWidth));
-    } else {
-      const index = Math.max(0, Math.min(sliders.specs.length - 1, drag.index + Math.round((e.clientY - drag.y) / PICK_STEP_PX)));
-      activeSlider.val = sliders.specs[index].id;
-    }
-  });
-  van.derive(() => { structure.val; stageEl.classList.toggle("is-adjustable", !!activeSpec()); });
-
-  const endDrag = (e) => { if (drag?.id === e.pointerId) { drag = null; picking.val = false; } };
-  stageEl.addEventListener("pointerup", endDrag);
-  stageEl.addEventListener("pointercancel", endDrag);
-
-  // The readout on the photo: the highlighted slider and its value, or the whole list while picking.
-  const AdjustReadout = () => () => {
-    structure.val;
-    const specs = sliders.specs;
-    if (!specs.length || compare.val) return emptyNode();
-    const value = (spec) => span({ class: "adjust-value" }, () => formatValue(spec, sliders.shown.get(spec.id).val));
-    if (picking.val) {
-      return div({ class: "adjust-list" }, ...specs.map((spec) =>
-        div({ class: () => (activeSlider.val === spec.id ? "adjust-item is-active" : "adjust-item") }, span(spec.label), value(spec))));
-    }
-    const spec = activeSpec() ?? specs[0];
-    return div({ class: "adjust-pill" }, span(spec.label), value(spec));
+  const dispose = () => {
+    cancelAnimationFrame(frame);
+    resizeObserver.disconnect();
+    pipeline?.destroy();
+    pipeline = null;
+    document.removeEventListener("keydown", onKey);
+    document.removeEventListener("keyup", onKeyUp);
+    phoneQuery.removeEventListener("change", onLayoutChange);
   };
 
-  // ---- overlays ----
+  // ---- the photo: gestures and overlays ----
 
-  let cropOverlay = null;
-  const inputSize = () => [stage.width, stage.height]; // the crop step's input while a crop is selected
+  const gestures = photoGestures(stageEl, { tool: () => (compare.val ? null : current.val), onChange: edited });
+
   van.add(overlayHost, () => {
     structure.val;
     cropOverlay = null;
-    const tool = selectedTool();
-    if (!tool || compare.val) return emptyNode();
-    if (tool.geometry === "input") {
-      const entry = selectedEntry();
-      cropOverlay = CropOverlay(entry.params, () => aspectRatio(entry.params.aspect, ...inputSize()), inputSize, () => { dirty.val = true; });
-      return cropOverlay.element;
+    const t = current.val;
+    if (!t || compare.val) return emptyNode();
+    if (t.tool.geometry === "crop") {
+      // The crop box is always shown. It takes drags only while it's the active pick, and the
+      // alignment grid shows while straightening or correcting perspective.
+      const params = t.entry.params;
+      cropOverlay = CropOverlay(params, () => aspectRatio(params.aspect, ...inputSize()), inputSize, () => { dirty.val = true; });
+      return div({ class: () => `geometry-overlay${t.cropActive() ? " is-cropping" : ""}` }, div({ class: "grid-overlay" }), cropOverlay.element);
     }
-    if (tool.geometry === "grid") return GridOverlay();
+    // On phones the curve is drawn over the photo, as in Snapseed. On larger screens it's in the panel.
+    if (phone.val && t.tool.params.some((s) => s.kind === "curves")) return CurveEditor(t.entry.params.points, edited, { overlay: true });
     return emptyNode();
   });
-
-  // ---- tool panels ----
-
-  function CropControls(entry) {
-    const aspect = van.state(entry.params.aspect);
-    const choose = (a) => {
-      dirty.val = true;
-      entry.params.aspect = a;
-      aspect.val = a;
-      const ratio = aspectRatio(a, ...inputSize());
-      if (ratio !== null) {
-        entry.params.rect = centredRect(ratio, ...inputSize());
-        cropOverlay?.reset(entry.params.rect);
-      }
-    };
-    return [
-      span({ class: "editor-label" }, "Aspect ratio"),
-      div({ class: "choice-buttons" }, ...ASPECT_OPTIONS.map((a) => button({
-        class: () => `btn-ghost btn-small${aspect.val === a ? " is-active" : ""}`, onclick: () => choose(a),
-      }, ASPECT_LABELS[a] ?? a))),
-      p({ class: "editor-hint" }, "Drag the corners or edges to crop, or drag inside the box to move it. Enter or Done applies it."),
-      button({ class: "btn-ghost btn-small", onclick: () => { dirty.val = true; entry.params.aspect = "free"; aspect.val = "free"; entry.params.rect = [0, 0, 1, 1]; cropOverlay?.reset(entry.params.rect); } }, "Reset crop"),
-    ];
-  }
-
-  function RotateControls(entry, tool) {
-    const flipped = van.state(entry.params.flip);
-    const turn = (delta) => { entry.params.quarterTurns = (entry.params.quarterTurns + delta + 4) % 4; edited(); };
-    return [
-      div({ class: "choice-buttons" },
-        button({ class: "btn-ghost btn-small", onclick: () => turn(3), title: "Rotate 90° counter-clockwise" }, "↺ 90°"),
-        button({ class: "btn-ghost btn-small", onclick: () => turn(1), title: "Rotate 90° clockwise" }, "↻ 90°"),
-        button({
-          class: () => `btn-ghost btn-small${flipped.val ? " is-active" : ""}`, title: "Flip horizontally",
-          onclick: () => { entry.params.flip = !entry.params.flip; flipped.val = entry.params.flip; edited(); },
-        }, "Flip")),
-      Slider(tool.params.find((s) => s.id === "angle"), entry.params, edited, { shown: sliders.shown.get("angle"), active: activeSlider }),
-      p({ class: "editor-hint" }, "Scroll on the photo, or drag across it, to straighten. Straightening crops to the largest rectangle that fits, so there are no blank corners."),
-    ];
-  }
-
-  const ToolPanel = () => () => {
-    structure.val; // re-render when the stack or selection changes
-    const entry = selectedEntry();
-    if (!entry) return p({ class: "editor-hint" }, recipe.stack.length ? "Select an edit to adjust it." : "Add a tool to start editing.");
-    const tool = TOOLS[entry.tool];
-    let controls;
-    if (tool.id === "crop") controls = CropControls(entry);
-    else if (tool.id === "rotate") controls = RotateControls(entry, tool);
-    else {
-      controls = tool.params.map((spec) => {
-        if (spec.kind === "curves") return CurveEditor(entry.params[spec.id], edited);
-        if (spec.kind === "choice") return Choice(spec, entry.params, edited);
-        return Slider(spec, entry.params, edited, { shown: sliders.shown.get(spec.id), active: activeSlider });
-      });
-      if (sliders.specs.length) {
-        controls.push(p({ class: "editor-hint" }, "Scroll on the photo, or drag across it, to adjust the highlighted slider. Drag up or down on the photo to pick another. Double-click a slider to reset it."));
-      }
-    }
-    return div(
-      { class: "tool-panel" },
-      div({ class: "tool-panel-head" }, h2(tool.label), button({ class: "btn-primary btn-small", onclick: () => select(-1) }, "Done")),
-      ...controls,
-    );
-  };
-
-  const Stack = () => () => {
-    structure.val;
-    const current = selected.val;
-    if (!recipe.stack.length) return emptyNode();
-    return ol(
-      { class: "edit-stack" },
-      ...recipe.stack.map((entry, i) =>
-        li(
-          { class: i === current ? "stack-entry is-active" : "stack-entry" },
-          button({ class: "stack-select", onclick: () => select(i) }, `${i + 1}. ${TOOLS[entry.tool].label}`),
-          button({ class: "stack-remove", "aria-label": `Remove ${TOOLS[entry.tool].label}`, title: "Remove this edit", onclick: () => remove(i) }, "×"),
-        )),
-    );
-  };
 
   van.add(stageEl,
     () => {
@@ -426,32 +350,22 @@ function EditorSession(photoState) {
       return span({ class: s.kind === "loading" ? "editor-loading" : "visually-hidden" }, "Loading…");
     },
     frameEl,
-    AdjustReadout(),
+    gestures.Readout(),
     () => (compare.val ? span({ class: "compare-badge" }, "Original") : emptyNode()));
+
+  // ---- the controls ----
+
+  const ui = {
+    filename: photo.filename, recipe, structure, current, sheet, dirty, saving, hasSavedEdit,
+    add, open, apply, cancel, remove, edited, save, revert, close, setCompare,
+    setAspect, resetCrop, turn, flip,
+    canSave: () => dirty.val && !saving.val && status.val.kind === "ready",
+  };
 
   const element = div(
     { class: "editor", role: "dialog", "aria-label": `Editing ${photo.filename}` },
     stageEl,
-    div(
-      { class: "editor-panel" },
-      div({ class: "editor-header" },
-        span({ class: "editor-title" }, photo.filename),
-        button({ class: "btn-ghost btn-small", onclick: close }, "Close")),
-      div({ class: "editor-section" },
-        span({ class: "editor-label" }, "Add a tool"),
-        div({ class: "tool-buttons" }, ...TOOL_ORDER.map((id) => button({ class: "btn-ghost btn-small", onclick: () => add(id) }, TOOLS[id].label)))),
-      div({ class: "editor-section" }, span({ class: "editor-label" }, "Edits"), Stack()),
-      div({ class: "editor-section editor-tool" }, ToolPanel()),
-      div({ class: "editor-footer" },
-        button({
-          class: "btn-ghost btn-small",
-          onpointerdown: () => setCompare(true), onpointerup: () => setCompare(false), onpointerleave: () => setCompare(false),
-          title: "Hold to see the original (or hold \\)",
-        }, "Compare"),
-        () => (hasSavedEdit.val ? button({ class: "btn-ghost btn-small btn-danger", disabled: () => !!saving.val, onclick: revert }, "Revert") : emptyNode()),
-        span({ class: "editor-note" }, () => saving.val ?? (dirty.val ? "Unsaved changes" : hasSavedEdit.val ? "Saved" : "")),
-        button({ class: "btn-primary btn-small editor-save", disabled: () => !dirty.val || !!saving.val || status.val.kind !== "ready", onclick: save }, "Save")),
-    ),
+    () => (phone.val ? PhoneControls(ui) : DesktopPanel(ui)),
   );
   return { element, dispose };
 }

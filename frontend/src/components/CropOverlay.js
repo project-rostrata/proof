@@ -37,12 +37,17 @@ export function CropOverlay(params, ratio, size, onChange) {
     return [(e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height];
   };
 
+  // A drag the box takes is stopped here, so the photo gestures underneath (Editor) never see it.
+  // Any other drag, including "moving" a box that already fills the photo, passes through to them.
   root.addEventListener("pointerdown", (e) => {
     const handle = e.target.closest?.("[data-handle]")?.dataset.handle;
     if (!handle) return;
+    const [, , w, h] = rect.val;
+    if (handle === "move" && w >= 0.999 && h >= 0.999) return; // nowhere to move it
     drag = { handle, start: point(e), rect: [...rect.val] };
     root.setPointerCapture(e.pointerId);
     e.preventDefault();
+    e.stopPropagation();
   });
   root.addEventListener("pointermove", (e) => {
     if (!drag) return;

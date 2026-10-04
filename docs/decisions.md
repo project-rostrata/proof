@@ -589,3 +589,53 @@ The human asked for a last full audit, with two goals: secure enough for a home 
   - a photo copied into the folder appearing on reload.
 
   No page errors, and every file written was owned by the host user.
+
+## 2026-10-04 — The editor on phones, Snapseed's way, and fewer tools
+
+The human asked for Snapseed's editing model, especially on phones:
+1. pick a tool;
+2. swipe up or down on the photo to choose a control;
+3. swipe left or right to change it.
+
+All of it with one thumb. The gestures already existed (2026-10-03), but on a phone the photo got 495 of 900 px. The open tool's first slider started at 851 px, below the tool buttons, the stack, and the file header.
+
+**Fewer tools (the human's choice):**
+- **Tune** absorbs White Balance's temperature and tint, which replace Warmth. They had the same CAT16 maths, and white balance already ran first inside Tune.
+- **Crop & Rotate** replaces Crop, Rotate, and Perspective. Its steps compose into one matrix for one warp pass, so the photo is resampled once rather than up to three times. Turns and flip come first, so "vertical" keystone means vertical on screen. The crop comes last, on what the editor shows.
+- **Vignette and Black & White stay separate**, rather than becoming one "Looks" tool. Black & White always converts, and vignette applies to colour photos, so a merged tool would need controls that only work in one mode. They're grouped under Looks in the tool list instead.
+
+Nine tools became six. No recipe migration was written, because nothing is deployed (the human's call). Recipes saved with the old tool ids won't reopen.
+
+**One tool open at a time, applied or discarded.** As in Snapseed, ✓ (Done, Enter) keeps a tool's changes and ✕ (Cancel, Esc) discards them. A new layer is dropped, and a reopened one gets its parameters back, along with the session's unsaved flag. Before this there was only Done.
+
+**Phones (`max-width: 800px`):**
+- **The bar:** the photo fills the screen (841 of 900 px), with one bar under it.
+  - With no tool open: ✕, Tools, Edits, Compare, Save.
+  - With a tool open: ✕, the tool's name, ≡, ✓.
+- **Sheets:** Tools (grouped) and Edits (the stack, and Revert) slide up over the photo.
+- **Gestures only, the human's choice.** There are no sliders on phones. ≡ lists the controls with their values (tap one to choose it) and the tool's other controls: aspect presets, turns and flip, film and filter.
+- **Curves** is drawn over the photo, as in Snapseed.
+- **One layout at a time.** `Editor.js` builds either the phone layout or the desktop panel, chosen by a live media query, so no control exists twice and nothing needs keeping in step.
+
+**The crop box and the gestures.** In Crop & Rotate the crop box is one of the picks, alongside Straighten, Vertical, and Horizontal. The box stops only the drags it actually uses: resizing, or moving a box smaller than the photo. Everything else reaches the gestures. Before that fix, the box filled the photo when the tool opened, so every swipe landed on it and you couldn't swipe from Crop to Straighten. While a slider is active, the box's handles hide and an alignment grid shows.
+
+**Structure.** The editor is split into four files:
+- `Editor.js`: the session;
+- `editor/tool.js`: the open tool, its picks, and the snapshot that ✕ restores;
+- `editor/gestures.js`: the photo gestures, moved out of `Editor.js` unchanged apart from the crop pick;
+- `editor/controls.js`: both layouts, built from shared pieces.
+
+`GridOverlay.js` was removed (the grid is now part of the geometry overlay).
+
+**Checked:**
+- 45 pipeline tests pass. Fewer tools means fewer per-tool identity tests. A new one checks exact pixels: that Crop & Rotate crops the turned photo, so the composition order is right.
+- At phone size with emulated touch:
+  - the Tools sheet;
+  - swiping in Tune, swiping down to pick, ≡ and tapping a control, ✓;
+  - in Crop & Rotate: swiping from Crop to Straighten, a 1:1 aspect and a quarter turn, with the result exactly the square crop of the turned, straightened photo;
+  - dragging the curve on the photo;
+  - ✕ restoring a reopened layer;
+  - saving.
+- On desktop: the panel, pressing Straighten then scrolling, Esc dropping a new layer, and Enter applying.
+
+No page errors.

@@ -96,10 +96,10 @@ This is the human's standing direction from `larder`: filtering, formatting, and
   - `lut(key, ...)` for cached data textures.
 
   An op **never releases its input**. It releases every scratch texture it doesn't return, and the pipeline tests check that the pool stops growing.
-- **Geometry ops change the image's size.** Crop shrinks it, and quarter turns swap width and height. The runner sizes each op's `PassContext` from that op's *input*, so `ctx.width`, `ctx.height`, and `ctx.longEdge` describe the image as it is at that step. A geometry op declares `geometry: "input"` (the editor shows the step's input with an overlay, as with Crop) or `geometry: "grid"` (live result plus an alignment grid). All three share one warp shader (`ops/geometry-shader.js`):
+- **Geometry ops change the image's size.** Crop shrinks it, and quarter turns swap width and height. The runner sizes each op's `PassContext` from that op's *input*, so `ctx.width`, `ctx.height`, and `ctx.longEdge` describe the image as it is at that step. All geometry is one tool, Crop & Rotate (`ops/crop-rotate.js`). It declares `geometry: "crop"`, so while it's open the editor renders it with the crop left out and draws the crop box over that. It composes its steps (turns and flip, keystone, straighten, crop) into one matrix for the one warp shader (`ops/geometry-shader.js`), so the photo is resampled once:
   - an output-pixel to input-pixel matrix;
-  - exact copying for crops, turns, and flips;
-  - Catmull-Rom bicubic for fine rotation and perspective.
+  - exact copying when there's no straighten or keystone (crops, turns, and flips);
+  - Catmull-Rom bicubic otherwise.
 
   Geometry params are normalised (0..1, or degrees), never pixels, so the preview and the export match.
 - **Parameter kinds** beyond numeric sliders: `curves`, `rect` (normalised `[x, y, w, h]`), `choice` (one of `options`), `toggle` (boolean), and `turns` (0–3 clockwise quarter turns). `recipe.js` validates and normalises each kind, and the editor builds a control for each.

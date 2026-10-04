@@ -326,7 +326,13 @@ label.btn-primary { position: relative; }
 .crop-e { left: 100%; top: 50%; cursor: ew-resize; } .crop-w { left: 0; top: 50%; cursor: ew-resize; }
 .crop-n::after, .crop-s::after { inset: 8px 4px; } .crop-e::after, .crop-w::after { inset: 4px 8px; }
 
-/* alignment grid for Rotate and Perspective */
+/* Crop & Rotate over the photo (views/Editor.js): the crop box is always shown, but takes drags only
+   while it's the active pick. Otherwise its handles hide, drags go to the photo gestures, and an
+   alignment grid shows for straightening and perspective. */
+.geometry-overlay { position: absolute; inset: 0; }
+.geometry-overlay:not(.is-cropping) .crop-overlay { pointer-events: none; }
+.geometry-overlay:not(.is-cropping) .crop-handle { display: none; }
+.geometry-overlay.is-cropping .grid-overlay { display: none; }
 .grid-overlay {
   position: absolute; inset: 0; pointer-events: none;
   background-image:
@@ -339,10 +345,11 @@ label.btn-primary { position: relative; }
   position: absolute; top: 16px; left: 50%; transform: translateX(-50%); padding: 3px 10px; border-radius: 4px;
   background: rgba(0,0,0,.6); border: 1px solid rgba(255,255,255,.15); font-size: 12px;
 }
-/* Snapseed-style adjusting on the photo (views/Editor.js). The readouts sit over the photo, so they
-   stay neutral: no accent colour on top of what's being judged. touch-action leaves pinch-zoom to
-   the browser and takes one-finger drags for adjusting. */
-.editor-stage.is-adjustable { cursor: ew-resize; touch-action: pinch-zoom; user-select: none; -webkit-user-select: none; }
+/* Snapseed-style adjusting on the photo (views/editor/gestures.js). The readouts sit over the photo,
+   so they stay neutral: no accent colour on top of what's being judged. touch-action leaves
+   pinch-zoom to the browser and takes one-finger drags for adjusting. */
+.editor-stage.is-adjustable { touch-action: pinch-zoom; user-select: none; -webkit-user-select: none; }
+.editor-stage.is-sliding { cursor: ew-resize; }
 .adjust-pill {
   position: absolute; top: 16px; left: 50%; transform: translateX(-50%); display: flex; gap: 10px; white-space: nowrap;
   padding: 5px 14px; border-radius: 999px; background: rgba(0,0,0,.62); border: 1px solid rgba(255,255,255,.15);
@@ -392,9 +399,59 @@ label.btn-primary { position: relative; }
 .curve-point { fill: #0E0E0E; stroke: #EBEBEB; stroke-width: 2; cursor: grab; }
 .curve-footer { display: flex; justify-content: flex-end; }
 
-@media (max-width: 800px) {
-  .editor { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) 45vh; }
-  .editor-panel { border-left: none; border-top: 1px solid rgba(255,255,255,.08); }
-}
 .editor-save { margin-left: auto; }
+.tool-group + .tool-group { margin-top: 10px; }
+.tool-panel-actions { display: flex; gap: 6px; }
+/* Crop & Rotate's crop section is a pick, like a slider: highlighted while the box takes drags. */
+.pick-section { margin-bottom: 12px; padding: 8px; margin-left: -8px; margin-right: -8px; border-radius: 6px; }
+.pick-section.is-active { background: rgba(255,255,255,.05); }
+.pick-section.is-active > .editor-label { color: var(--accent-on-surface); }
+
+/* The curve over the photo (phones): channels along the top, the curve in a square filling the
+   middle, and its reset underneath, clear of the curve's end points. */
+.curve-editor.is-overlay { position: absolute; inset: 0; padding: 6px; gap: 6px; align-items: center; }
+.curve-editor.is-overlay .curve-channels { background: rgba(0,0,0,.6); border-radius: 8px; padding: 2px; }
+.curve-editor.is-overlay .curve-svg { flex: 1; min-height: 0; width: auto; max-width: 100%; background: rgba(0,0,0,.25); border-color: rgba(255,255,255,.25); }
+.curve-editor.is-overlay .curve-point { r: 9px; }
+.curve-editor.is-overlay .curve-footer { background: rgba(0,0,0,.6); border-radius: 8px; }
+
+/* ---- phones: Snapseed's layout (views/editor/controls.js). The photo fills the screen, with one bar
+   under it, and sheets that slide up over the photo for the tools, the edits, and ≡. ---- */
+@media (max-width: 800px) {
+  .editor { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) auto; }
+  .editor-stage { padding: 8px; }
+}
+.editor-phone { position: relative; }
+.editor-bar {
+  display: flex; align-items: center; gap: 4px; padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
+  background: #161616; border-top: 1px solid rgba(255,255,255,.08);
+}
+.bar-button {
+  flex: 1; min-width: 0; min-height: 46px; padding: 0 8px; border-radius: 8px; cursor: pointer;
+  background: none; border: none; color: #EBEBEB; font: inherit; font-size: 14px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; -webkit-user-select: none; user-select: none;
+}
+.bar-button:active { background: rgba(255,255,255,.08); }
+.bar-button:disabled { color: #6E6E6E; }
+.bar-button.is-primary { background: var(--accent-fill); color: #FFFFFF; }
+.bar-button.is-primary:disabled { background: rgba(255,255,255,.06); color: #6E6E6E; }
+.bar-icon { flex: 0 0 46px; font-size: 20px; padding: 0; }
+.bar-title { font-weight: 600; }
+.sheet-layer { position: absolute; left: 0; right: 0; bottom: 100%; height: 100vh; height: 100dvh; display: flex; flex-direction: column; justify-content: flex-end; }
+.sheet-scrim { flex: 1; }
+.editor-sheet {
+  max-height: 65vh; overflow-y: auto; overscroll-behavior: contain; padding: 4px 14px 14px;
+  background: #1A1A1A; border-radius: 14px 14px 0 0; border-top: 1px solid rgba(255,255,255,.1);
+}
+.sheet-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; position: sticky; top: 0; background: #1A1A1A; }
+.sheet-title { font-weight: 600; }
+.sheet-section { margin: 8px 0; }
+.sheet-revert { margin-top: 12px; }
+.editor-sheet .tool-buttons .btn-small { min-height: 42px; padding: 0 14px; font-size: 14px; }
+.pick-row {
+  display: flex; justify-content: space-between; align-items: center; width: 100%; min-height: 46px; padding: 0 12px;
+  background: none; border: none; border-radius: 8px; color: #C8C8C8; font: inherit; font-size: 15px; cursor: pointer;
+}
+.pick-row.is-active { background: rgba(255,255,255,.9); color: #141414; }
+.pick-note { color: inherit; opacity: .6; font-size: 13px; }
 .edited-badge { font-size: 11px; color: var(--accent-on-surface); line-height: 1; }

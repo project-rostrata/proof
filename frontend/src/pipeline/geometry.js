@@ -39,7 +39,7 @@ function invert3(m) {
   ];
 }
 
-function multiply3(a, b) {
+export function multiply3(a, b) {
   const out = new Array(9);
   for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) {
     out[r * 3 + c] = a[r * 3] * b[c] + a[r * 3 + 1] * b[3 + c] + a[r * 3 + 2] * b[6 + c];

@@ -37,12 +37,15 @@ in a plain `edits/` folder. PostgreSQL is only an index over those files.
   - Ratings are saved to standard XMP sidecars that darktable and Lightroom can read. proof merges
     into an existing sidecar, so darktable's edit history is never overwritten.
 - **Edit with Snapseed-style tools on a non-destructive stack.**
-  - Tune Image: brightness, contrast, saturation, ambiance, highlights, shadows, warmth.
-  - White Balance, Curves, and Details (structure, sharpening).
-  - Crop, Rotate/Straighten, and Perspective.
+  - Tune: brightness, contrast, saturation, ambiance, highlights, shadows, temperature, tint.
+  - Details (structure, sharpening) and Curves.
+  - Crop & Rotate: crop, quarter turns, flip, straighten, and perspective, in one step.
   - Vignette, and Black & White with film emulations, colour filters, and grain.
-  - As in Snapseed, once a tool is open the photo is the control: scroll over it or drag across
-    it to adjust a slider, and drag up or down to pick another.
+  - As in Snapseed, once a tool is open the photo is the control: drag across it (or scroll) to
+    change a value, and drag up or down to pick another. On a phone the photo fills the screen,
+    so it all works with one thumb.
+  - Each use of a tool is one layer you can reopen, change, or remove. ✕ discards a tool's
+    changes and ✓ keeps them.
   - Hold to compare with the original.
   - Edits render live in the browser on a 16-bit WebGL2 pipeline, with the filters ported from
     darktable. Saving renders the original at full resolution, copies its EXIF across, and keeps
