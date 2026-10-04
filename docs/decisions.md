@@ -651,3 +651,4 @@ The human's first try on a phone found two problems:
   - Curves' channel tabs and points.
 
   The overrides sit in their own media block *after* the phone base rules, so they win at equal specificity. The desktop panel is unchanged.
+- **Follow-up, same day: the list moves, not the highlight.** In Snapseed the highlight band stays still at the centre and the whole list slides through it with the finger. proof had a fixed list with a moving highlight. Now the picker draws a band fixed at the photo's centre, and the list is translated by the drag continuously, not row by row. Rows are exactly 40 px, the same as the drag per control, so the text tracks the finger pixel for pixel, and whichever row is in the band is selected. The band is drawn on top as a bright outline, so the list's dark backing can't dim it. Measured at phone size: the band stays at one position while 50 px of drag moves the list 50 px, and the control in the band is always the selected one.

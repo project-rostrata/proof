@@ -7,9 +7,10 @@ const { div, span } = van.tags;
 // Adjusting on the photo, as in Snapseed: with a tool open, the photo is the control.
 //   - Dragging sideways, or scrolling, changes the active slider. A drag across the whole photo is
 //     half the slider's range, and a mouse-wheel notch a fortieth (scrolling up raises it).
-//   - Dragging up or down picks the active control, from a list shown on the photo (one row per
-//     40 px). As in Snapseed, the list moves with the finger under a fixed highlight: dragging up
-//     brings the next control down into it. For Crop & Rotate the list includes the crop box.
+//   - Dragging up or down picks the active control. As in Snapseed, a highlight band stays fixed
+//     at the centre of the photo and the whole list slides through it with the finger, pixel for
+//     pixel (a row is PICK_STEP_PX tall, the same as the drag per control). Whichever control is in
+//     the band is the active one. For Crop & Rotate the list includes the crop box.
 //   - While the crop box is active, the drags it uses are its own: CropOverlay stops them, so they
 //     never reach here. Everything else, even over the box, is still a gesture.
 // A drag decides its direction after 8 px and is measured from there, so the value never jumps.
@@ -17,10 +18,11 @@ const { div, span } = van.tags;
 //
 // `tool()` is the open tool (tool.js), or null when there's none or the original is being compared.
 // It must read van states, so the readout and the stage's class follow it.
-const PICK_STEP_PX = 40;
+const PICK_STEP_PX = 40; // also the row height of the list (.adjust-item in style.css)
 
 export function photoGestures(stageEl, { tool, onChange }) {
   const picking = van.state(false); // the list shows while dragging up or down
+  const pickPos = van.state(0); //      where the list is, in rows: the band shows this row (fractional while dragging)
 
   van.derive(() => {
     const t = tool();
@@ -62,12 +64,14 @@ export function photoGestures(stageEl, { tool, onChange }) {
       drag = { ...drag, axis, x: e.clientX, y: e.clientY, value: spec && t.entry.params[spec.id], index: t.picks.findIndex((p) => p.id === t.active.val) };
       stageEl.setPointerCapture(e.pointerId);
       picking.val = axis === "y";
+      pickPos.val = drag.index;
     } else if (drag.axis === "x") {
       const spec = t.activeSlider();
       if (spec && t.setValue(spec, drag.value + ((e.clientX - drag.x) * (spec.max - spec.min)) / (2 * stageEl.clientWidth))) onChange();
     } else if (drag.axis === "y") {
-      const index = Math.max(0, Math.min(t.picks.length - 1, drag.index - Math.round((e.clientY - drag.y) / PICK_STEP_PX)));
-      t.active.val = t.picks[index].id;
+      const pos = Math.max(0, Math.min(t.picks.length - 1, drag.index - (e.clientY - drag.y) / PICK_STEP_PX));
+      pickPos.val = pos;
+      t.active.val = t.picks[Math.round(pos)].id;
     }
   });
   const endDrag = (e) => { if (drag?.id === e.pointerId) { drag = null; picking.val = false; } };
@@ -81,8 +85,10 @@ export function photoGestures(stageEl, { tool, onChange }) {
     if (!t?.picks.length) return emptyNode();
     const value = (pick) => (pick.spec ? span({ class: "adjust-value" }, () => formatValue(pick.spec, t.shown.get(pick.id).val)) : "");
     if (picking.val) {
-      return div({ class: "adjust-list" }, ...t.picks.map((pick) =>
-        div({ class: () => (t.active.val === pick.id ? "adjust-item is-active" : "adjust-item") }, span(pick.label), value(pick))));
+      return div({ class: "adjust-picker" },
+        div({ class: "adjust-band" }),
+        div({ class: "adjust-list", style: () => `transform: translateY(${-pickPos.val * PICK_STEP_PX}px)` }, ...t.picks.map((pick) =>
+          div({ class: () => (t.active.val === pick.id ? "adjust-item is-active" : "adjust-item") }, span(pick.label), value(pick)))));
     }
     const pick = t.picks.find((p) => p.id === t.active.val) ?? t.picks[0];
     return div({ class: "adjust-pill" }, span(pick.label), value(pick));

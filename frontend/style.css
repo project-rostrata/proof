@@ -356,12 +356,15 @@ label.btn-primary { position: relative; }
   font-size: 13px; pointer-events: none;
 }
 .adjust-value { font-family: var(--font-mono); }
-.adjust-list {
-  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); min-width: 220px; padding: 6px;
-  border-radius: 8px; background: rgba(0,0,0,.72); border: 1px solid rgba(255,255,255,.15); pointer-events: none;
-}
-.adjust-item { display: flex; justify-content: space-between; gap: 18px; padding: 7px 10px; border-radius: 5px; font-size: 13px; color: #C8C8C8; }
-.adjust-item.is-active { background: rgba(255,255,255,.9); color: #141414; }
+/* The picker: a fixed band at the centre of the photo, with the list sliding through it (gestures.js).
+   The picker's top edge sits half a row above the centre, the band (drawn on top, as a bright
+   outline) covers its first row, and the list is translated so the chosen row lines up with it. Rows are exactly 40 px, the drag per
+   control, so the list follows the finger pixel for pixel. */
+.adjust-picker { position: absolute; top: 50%; left: 50%; width: 270px; transform: translate(-50%, -20px); pointer-events: none; }
+.adjust-band { position: absolute; z-index: 1; left: 0; right: 0; top: 0; height: 40px; border-radius: 8px; border: 2px solid rgba(255,255,255,.95); background: rgba(255,255,255,.14); box-shadow: 0 0 0 1px rgba(0,0,0,.4); }
+.adjust-list { position: relative; padding: 0 8px; border-radius: 10px; background: rgba(0,0,0,.55); will-change: transform; }
+.adjust-item { display: flex; align-items: center; justify-content: space-between; gap: 18px; height: 40px; padding: 0 10px; font-size: 14px; color: #D8D8D8; text-shadow: 0 1px 2px rgba(0,0,0,.6); }
+.adjust-item.is-active { color: #FFFFFF; font-weight: 600; }
 .editor-panel { background: #161616; border-left: 1px solid rgba(255,255,255,.08); display: flex; flex-direction: column; min-height: 0; overflow-y: auto; }
 .editor-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 12px 14px; border-bottom: 1px solid rgba(255,255,255,.08); }
 .editor-title { font: 12px var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -459,8 +462,8 @@ label.btn-primary { position: relative; }
    the photo. */
 @media (max-width: 800px) {
   .adjust-pill { font-size: 17px; padding: 8px 18px; gap: 12px; top: 14px; }
-  .adjust-list { min-width: 270px; padding: 8px; border-radius: 12px; }
-  .adjust-item { font-size: 18px; padding: 9px 14px; min-height: 40px; box-sizing: border-box; align-items: center; border-radius: 8px; }
+  .adjust-picker { width: 290px; }
+  .adjust-item { font-size: 18px; padding: 0 14px; }
   .bar-button { min-height: 54px; font-size: 16px; }
   .bar-icon { flex-basis: 54px; font-size: 24px; }
   .editor-sheet { font-size: 16px; }
