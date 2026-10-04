@@ -35,10 +35,11 @@ function UploadPanel() {
 }
 
 // View tabs and counts come from the API (views[]); the client only asks for a different view.
+// Only on the Cull step: Edit and Export always list the picks.
 function FilterBar() {
   return () => {
     const current = state.current.val;
-    if (!current) return emptyNode();
+    if (!current || state.step.val !== "cull") return emptyNode();
     return div(
       { class: "filter-bar" },
       div(
@@ -160,7 +161,7 @@ export function Project() {
     StepBar(),
     StepIntro(onFiles),
     UploadPanel(),
-    () => (state.step.val === "cull" ? FilterBar() : emptyNode()),
+    FilterBar(),
     ContactSheet(),
     Loupe(),
   );

@@ -56,6 +56,8 @@ This is the human's standing direction from `larder`: filtering, formatting, and
 - **Display strings come from the API.** That includes capture dates, the exposure line ("23mm · f/2 · 1/250s · ISO 400"), file sizes, and counts ("38 of 212 rated"). Raw values stay in responses only where the UI needs them, for example the current rating to highlight a star.
 - **Derived values are computed by the API**, for example a photo's oriented dimensions.
 
+**VanJS: a binding returns nodes, never another binding.** A component like `FilterBar()` returns a binding (`() => ...`). Wrapping it in a second binding, as in `() => (cond ? FilterBar() : emptyNode())`, returns a *function*, and VanJS renders that function's source code as text on the page. Put the condition inside the component's own binding instead, and include the component directly.
+
 **The one sanctioned exception is the pixel pipeline** (`PROJECT_BRIEF.md` §4). The browser renders edits, and that code really is logic. Keep the exception narrow:
 - Pipeline code lives in `frontend/src/pipeline/` and nowhere else.
 - It never reaches into project, rating, or list state.
