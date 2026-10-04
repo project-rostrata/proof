@@ -5,8 +5,10 @@ import { emptyNode } from "../../vanHelpers.js";
 const { div, span } = van.tags;
 
 // Adjusting on the photo, as in Snapseed: with a tool open, the photo is the control.
-//   - Dragging sideways, or scrolling, changes the active slider. A drag across the whole photo is
-//     half the slider's range, and a mouse-wheel notch a fortieth (scrolling up raises it).
+//   - Dragging sideways, or scrolling, changes the active slider. As in Snapseed, a drag across
+//     half the photo's width takes a slider from its default to its furthest end (0 to ±100, or
+//     Straighten's 0 to ±45°), so one thumb stroke reaches any value. A mouse-wheel notch is a
+//     fortieth of the range (scrolling up raises it).
 //   - Dragging up or down picks the active control. As in Snapseed, a highlight band stays fixed
 //     at the centre of the photo and the whole list slides through it with the finger, pixel for
 //     pixel (a row is PICK_STEP_PX tall, the same as the drag per control). Whichever control is in
@@ -67,13 +69,16 @@ export function photoGestures(stageEl, { tool, onChange }) {
       pickPos.val = drag.index;
     } else if (drag.axis === "x") {
       const spec = t.activeSlider();
-      if (spec && t.setValue(spec, drag.value + ((e.clientX - drag.x) * (spec.max - spec.min)) / (2 * stageEl.clientWidth))) onChange();
+      if (spec && t.setValue(spec, drag.value + (e.clientX - drag.x) * unitsPerPixel(spec))) onChange();
     } else if (drag.axis === "y") {
       const pos = Math.max(0, Math.min(t.picks.length - 1, drag.index - (e.clientY - drag.y) / PICK_STEP_PX));
       pickPos.val = pos;
       t.active.val = t.picks[Math.round(pos)].id;
     }
   });
+  // Half the stage's width covers the distance from the default to the further end.
+  const unitsPerPixel = (spec) => Math.max(spec.max - spec.default, spec.default - spec.min) / (stageEl.clientWidth / 2);
+
   const endDrag = (e) => { if (drag?.id === e.pointerId) { drag = null; picking.val = false; } };
   stageEl.addEventListener("pointerup", endDrag);
   stageEl.addEventListener("pointercancel", endDrag);

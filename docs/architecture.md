@@ -77,7 +77,7 @@ The files:
   - `shown` holds each slider's value as a van state, shared by everything that displays it.
   - `before` is the snapshot ✕ restores.
 - **`editor/gestures.js` is adjusting on the photo:**
-  - dragging sideways (or scrolling) changes the active slider;
+  - dragging sideways (or scrolling) changes the active slider. As in Snapseed, half the photo's width takes a slider from its default to its furthest end;
   - dragging up or down picks. As in Snapseed, a highlight band stays fixed at the centre of the photo and the whole list slides through it with the finger, pixel for pixel (rows are 40 px, the drag per control). Whichever control is in the band is selected;
   - a pill shows the active pick and its value.
 
