@@ -17,7 +17,7 @@ Everything has been checked in headless Chrome (software GPU, synthetic photos) 
 - Try the whole flow on a real desktop and phone with real photos, especially swiping in the loupe and adjusting on the photo in the editor.
 - Create a GitHub repo and push, as with the siblings, so CI runs for real.
 - Decide on the open items: export (Phase 12), and purging rejects (`PROJECT_BRIEF.md` §5).
-- Consider porting the audit's security fixes to `shelf` and `larder`, which have the same gaps (`decisions.md`, the audit entry).
+- The audit's security fixes have been ported to `shelf` and `larder` (2026-10-09; see each one's `docs/decisions.md`).
 
 ## Known limitations
 
