@@ -4,8 +4,8 @@ A small, self-hosted photo editor that runs in your browser. Upload a batch of p
 the way you'd mark up a contact sheet, then edit the keepers with Snapseed-style tools on a
 non-destructive stack.
 
-> **Status: v1 feature-complete except export.** Export (Phase 12) is deferred. See
-> [`V1_PLAN.md`](V1_PLAN.md).
+> **Status: 1.0.0.** Upload, cull, edit, and export are all in. See [`V1_PLAN.md`](V1_PLAN.md)
+> for how it was built and [`docs/handoff.md`](docs/handoff.md) for what's open.
 
 ## Why
 

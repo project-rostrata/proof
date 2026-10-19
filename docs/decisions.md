@@ -708,3 +708,20 @@ How it's built:
 - On desktop: "Continue editing" opens the first unedited pick, the pass footer works, and Close returns to the Edit step.
 - **Follow-up: the pass shows each photo's decision.** On a phone, swiping back to a photo decided earlier in the pass showed nothing about it. The full view's small Pick and Reject toggles are hidden during the pass, and the big buttons looked the same whatever the photo's state. Now the big buttons start neutral and fill to show the photo's decision (Keep green, Reject red), and a "✓ Kept" or "✕ Rejected" label sits at the top of the photo. Choosing again changes the decision and moves on, as before. Checked with touch: keep, reject, then swiping back showed "✕ Rejected" and then "✓ Kept", each with its button filled, and an undecided photo showed neither.
 - **Follow-up: a binding rendered as text.** On the Cull step, the filter bar's source code appeared above the grid as text. The step change had wrapped `FilterBar()`, which already returns a VanJS binding, in a second binding. That returns a function, which VanJS renders as a string. The step condition now lives inside `FilterBar`'s own binding, and `AGENTS.md` records the rule. The workflow test had only clicked through the steps, so it couldn't see this. The check that would have caught it now scans every visible text node for source-like text (`=>`, `function (`, `.val`, `emptyNode`). It was run on every step, both passes, and the phone sheets, on desktop and phone, and all were clean. The filter bar shows on Cull only.
+
+## 2026-10-18 — v1.0.0
+
+Released as the annotated tag `v1.0.0`, the same way as `shelf` and `larder`: no changelog file and no version constant in the code, because the tag is the version and CI turns a `v*` tag into an image tag. The release adds no code. It updates the README's status, the plan, and the handoff.
+
+Checked before tagging:
+- 119 backend tests pass, natively and in the Docker `backend-test` stage.
+- 45 pipeline tests pass in headless Chrome.
+- The `runtime` and `standalone` images build.
+- The standalone image was smoke-tested from scratch:
+  - health, registration, upload, and culling;
+  - the step summaries and the suggestion;
+  - a ZIP export holding exactly the picks, and thumbnails;
+  - a container restart with the session and index intact;
+  - files owned by the host user, and no severe log lines.
+
+The human also asked for local commits made during working hours to be moved outside them. None needed it: every commit was already on a weekday evening (17:52 at the earliest) or a weekend, so history wasn't rewritten.

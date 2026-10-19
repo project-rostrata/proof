@@ -7,7 +7,9 @@ Built from `PROJECT_BRIEF.md`. Open questions resolved so far:
 - files are the truth, with a Postgres index;
 - v1 accepts JPEG and PNG only.
 
-Still open (brief §5): auth, target devices, XMP naming, upload cap, export options, purging rejects, and the v1 tool list.
+Still open (brief §5): auth, target devices, XMP naming, upload cap, export options, purging rejects, and the v1 tool list. (All of these were later settled except purging rejects; see the brief.)
+
+**Released as v1.0.0 on 2026-10-18.** Every phase below is done.
 
 This plan breaks v1 into ordered phases. Each phase should leave the app in a buildable, runnable state, and no phase depends on a later phase to compile.
 

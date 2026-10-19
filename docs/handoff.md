@@ -2,22 +2,27 @@
 
 This file is *state*, not documentation: where things stand now, for whoever picks the project up next. Rewrite it each session; don't append to it. The history of how it got here is in `../V1_PLAN.md` (phase by phase) and `decisions.md` (why).
 
-## Where things stand (2026-10-03)
+## Where things stand (2026-10-18)
 
-v1 is built, except export (Phase 12, skipped at the human's request). That includes reconciliation (Phase 6), which was deferred and then built after Phase 14. A full audit followed, for security on a home server and for maintainability. See the last entries in `decisions.md`.
+**v1.0.0 is released:** the annotated tag `v1.0.0` on `main`. Every phase in `V1_PLAN.md` is done, including reconciliation (Phase 6) and export (Phase 12). Since the plan's phases, the project gained:
+- the home-server security audit;
+- Snapseed's one-thumb editing on phones;
+- the four workflow steps: Upload · Cull · Edit · Export.
 
-- **Backend:** 114 tests pass (`backend/test.sh`), and in Docker (`docker build -f docker/Dockerfile --target backend-test .`).
-- **Pipeline:** 48 tests pass in headless Chrome (`frontend/test/run-headless.sh`).
-- **CI** (`.github/workflows/docker-build.yml`) has never run on GitHub, because there's no remote yet.
+`decisions.md` covers each.
 
-Everything has been checked in headless Chrome (software GPU, synthetic photos) and against real Postgres. The human has used it on their own desktop, and their feedback shaped the work after Phase 14: the loupe culling controls, swiping, Snapseed-style adjusting, the theme switch, and the eel-green accent.
+Checked for the release:
+- **Backend:** 119 tests pass (`backend/test.sh`), and in Docker (`docker build -f docker/Dockerfile --target backend-test .`).
+- **Pipeline:** 45 tests pass in headless Chrome (`frontend/test/run-headless.sh`).
+- **Images:** the `runtime` and `standalone` images build. The standalone image was smoke-tested from scratch: health, register, upload, cull, steps, a ZIP export, thumbnails, and a restart with the data intact, with files owned by the host user.
+
+**CI** (`.github/workflows/docker-build.yml`) has never run on GitHub, because there's no remote yet. Pushing `main` and the `v1.0.0` tag will build and publish the standalone image to GHCR as `:v1.0.0`.
 
 ## For the human
 
-- Try the whole flow on a real desktop and phone with real photos, especially swiping in the loupe and adjusting on the photo in the editor.
-- Create a GitHub repo and push, as with the siblings, so CI runs for real.
-- Decide on the open items: export (Phase 12), and purging rejects (`PROJECT_BRIEF.md` §5).
-- The audit's security fixes have been ported to `shelf` and `larder` (2026-10-09; see each one's `docs/decisions.md`).
+- Create a GitHub repo and push `main` with its tags (`git push -u origin main --follow-tags`), as with the siblings, so CI runs for real.
+- Try the whole flow on a real phone with real photos. The cull pass and the edit pass have only been run in emulation.
+- Still open: purging rejects (`PROJECT_BRIEF.md` §5), and whether the Cull step should be called "Pick" (asked 2026-10-04, not decided).
 
 ## Known limitations
 
@@ -25,6 +30,8 @@ Listed in `decisions.md` (the Phase 14 entry):
 - banding when shadows are lifted hard on 8-bit sources;
 - Perspective has keystone sliders, not free corners;
 - no tiled rendering for photos larger than the GPU's maximum texture size.
+
+Edits saved before 2026-10-04 (the tool merge) don't reopen in the editor. Their saved JPEGs still show and export.
 
 ## Working on it
 
